@@ -1,0 +1,190 @@
+2012/12/22 18:34:40
+
+    * Add a URI of /info to get a json information string. At present 
+      this contains minimal information, but can be easily extended 
+      with all sorts of internal app information.
+    * The bug using just a '/' persists, and a 404 is returned.
+    * And the bug adding new fid for continuing flights persists, but 
+      it has been reduced.
+    * Added a -L secs to be able to set the flight timeout from the 
+      command line.
+    * Bumped AGE to 19.
+
+
+2012/12/22 14:04:00
+
+    * Revert to using select on HTTP interface, but this handling still
+      needs some attention.
+    * Chop example_EllipticFunction() from geod.cxx due to some 
+      differences either in the GeographicLib header/library versions,
+      or perhaps different gcc versions 4.4.5 2010 vs 4.6.3 2011.
+    * Attempted bug fix. Due to too many new fid being created, change to using a new 
+      structure variable 'last_seen', which is ALWAYS updated, no 
+      matter what the actual packet dispostion is, for the judgement 
+      as to whether a flight has expired.
+    * Bumped AGE to 18.
+
+2012/12/20 14:50:14
+
+    * Add some functions to cf_misc.cxx/hxx
+      char *Get_Current_GMT_Time_Stg() returns GMT time in 
+      Www Mmm dd hh:mm:ss yyyy form, without any line endings.
+      double get_seconds(); and char *get_seconds_stg( double secs );
+      Get a 'timestamp' in seconds + nanoseconds, and return a 
+      nicely formatted string repesenting elapsed time with units appended.
+      class cf_String - offering a flexible buffer for Printf(), Appendf()
+    * Added some thin postgresql and sqlite3 classes to offer a consistent
+      API to those libraries. These are added to the CMakeLists.txt to 
+      include them in the build. And add a test_pg2 app to 'test' the 
+      postgresql interface.
+    * Added src/cf_lib/win_strptime.cxx to provide timegm(struct tm *) and 
+      strptime(char *, char *, struct tm*) services in Windows.
+    * Added geod.cxx/hxx to library under USE_GEOGRAPHIC_LIB option, as a 
+      possible replacement of some SimGear functions.
+    * Added a test_http app, used to develop, improve and test the http interface 
+      handling.
+    * Fixed and changed behaviour of '/' URI to return an information json
+      string.
+    * Bumped AGE to 17.
+
+2012/12/14 16:51:16
+
+    * Enhance src/test_db.cxx to run some further postgresql database 
+      tests, including adding and deleting records to/from the 'flights'
+      and 'positions' tables of tracker_test db as established by the 
+      create_db.sql script. Compiles and runs in both windows and Ubuntu.
+    * Bumped AGE to 16.
+
+2012/12/13 14:12:38
+
+    * Commence to work with PostgreSQL database, on by default.
+      Use find_package(PostgreSQL REQUIRED). Abort if NOT found.
+    * Add a test_pg app, to do a connection test, query schema, 
+      and search for table 'flights' and 'positions'.
+    * Bumped AGE to 15.
+
+2012/12/12 18:32:32
+
+    * Disable json file output by default.
+    * Allow '-s none' to disable SQL db output
+    * Increased the verbosity on a number of log outputs.
+    * Bumped AGE to 14.
+
+2012/12/12 16:22:56
+
+    * Start up the 'worker' thread with start_tracker_thread() to 
+      handle the tracker packets.
+    * Do the database 'init' befoere starting the threads, and 
+      abort if either fail.
+    * Add some 'thread' stats, output each 5 mins or so...
+    * Bumped AGE to 13.
+
+
+2012/12/11 19:10:44
+
+    * Improve SQLite3 'busy' handling, using nanosleep() to try to 
+      wait for not busy, before recording an error which equals a 
+      lost message. Allow up to 10 such errors before aborting the 
+      application. Of course this is in the thread so does not effect 
+      the main thread operation.
+    * Moved the nanosleep windows port into cf_misc.cxx, that is into 
+      the cf_lib.
+    * Set an 'init' json output, but not yet available via http.
+    * Bumped AGE to 12.
+
+2012/12/09 16:27:55
+
+    * Added 'tracker' to SQLite3 database, under CMake option
+      -DUSE_SQLITE3_DATABASE:BOOL=TRUE, default is OFF, through new 
+      modules src/cf_sqlite3.cxx/hxx.
+    * Above adds pthread dependency to this crossfeed project. The 
+      tracker messages are added to a vector, by acquiring a mutex, adding 
+      the message, then triggering a signal, and the tracker thread 
+      waits on that condition to feed of that message vector. The vector 
+      contains as allocated structure, which is freed by the tracker 
+      thread after it has added the transaction to the database.
+    * This addition was started in the 'tracker' branch.
+    * Bumped AGE to 11
+
+
+2012/11/27 12:51:29
+
+    * Fix setting of the unique flight id, now produced by a simple 
+      get_epoch_id() = epoch second * 1000 + a counter to make unique.
+    * Added a get_epoch_usecs() which returns the gettimeofday()
+      total usecs as a uint64_t.
+    * Some work on calculating total distance travelled, in NM, for 
+      each pilot, but not yet exposed, except as an output when verbosity
+      increased to 2 or more.
+    * Bumped AGE to 10
+
+2012/11/26 11:45:33
+
+    * Added a unique 'flight id', using gettimeofday( &tv, 0 ), using
+      uitn64_t id = (tv.tv_sec * 1000000) + tv.tv_usec; These services
+      int set_epoch_id_stg( char *cp, uint64_t id );
+      uint64_t get_epoch_id();
+      char *get_epoch_id_stg(uint64_t id);
+      were added tp cf_misc.cxx and exposed in cf_misc.hxx
+      This adds a "fid":"18446744072826695760" to the json string.
+    * Added a SGTimeStamp::sleepForMSec(100); in the main data 
+      receive loop, if there has NOT been any reception of fgms packets 
+      on the main port. This needs libSimGearCore so turning off the 
+      USE_SIMGEAR macro is now broken. Perhaps this flag should be removed.
+    * Added a int Get_JSON_Expired( char **pbuf ); to get the EXPIRED pilots 
+      remaining in the main vector. TODO - Garbage Collection to removed 
+      expired pilots from the vector.
+    * Bumped AGE to 9
+
+2012/11/21 17:38:47
+
+    * Changed json string. Put ALL keys: in double inverted 
+      commas, "success":true. and removed "server", and all spaces 
+      in the line.
+    * Return json if the request is '/' OR '/data'
+    * Set the select timeout to 10 seconds, as it should have 
+      been. Increased stats to each 5 minutes only.
+    * Bumped AGE to 8
+
+2012/11/08 17:07
+
+    * cf_client - Some fixes in the HTTP handling, and much more
+      debug output if -v9
+      Now after select(), if 'send' is valid but not 
+      'recv' do a nanosleep() for 100000000 nanoseconds,
+      1/10 of a second, and this seems to get 'recv'
+      valid.
+    * Only output the print_pilot() if verbosity is 2 or 
+      greater. Verbosity defaults to 1.
+    * Reduce output of jason file written to once each
+      300 seconds.
+    * Bumped AGE to 6
+
+2012/11/07 19:53
+
+    * Added setting of Telnet and HTTP IP address using 
+      new -A addr option. Defaults is 127.0.0.1
+    * Some changes in the HTTP handling. Seems IE can 
+      delay many ms before sending the GET text string
+      If less that 50 cycles, re-do the select until a 
+      receive is found. This is not yet ideal, but works...
+      This tends to suggest HTTP handling should be on a thread 
+      that is prepared to wait for 'slow' browser action.
+    * Added binary installation to /usr/sbin in unix, and 
+      ${SRC_DIR}/../3rdParty/bin in windows
+    * Bumped AGE to 5
+    
+10-30-2012 13:52
+
+	* Reduce output by reversing the sense of the logs.
+	  That is they are OFF unless requested.
+	* Reduce the overall log file output using the SPRTF()
+	  macro.
+
+10-16-2012 00:00
+
+	* Project commenced using bits and pieces from fgms and
+	  fg io modules.
+
+# eof
+
