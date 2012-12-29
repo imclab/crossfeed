@@ -30,7 +30,7 @@ set (SERV_EXE cf_server)
 # The version number.
 set (cf_MAJOR 1)
 set (cf_MINOR 0)
-set (cf_AGE   19)
+set (cf_AGE   20)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
     message(FATAL_ERROR "*** ERROR: Only ONE of USE_POSTGRESQL_DATABASE or USE_SQLITE3_DATABASE can be enabled, NOT BOTH!")

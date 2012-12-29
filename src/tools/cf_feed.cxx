@@ -181,7 +181,8 @@ static vPKTS vPackets;
 static int packet_min = 0;
 static int packet_max = 40000;
 static int do_sleep_10 = 1;
-static int ms_sleep = 200;  // 100;
+static int ms_sleep = 10;  // 10-100;
+static time_t stat_delay = 30;
 
 int load_packet_log()
 {
@@ -196,12 +197,12 @@ int load_packet_log()
     //Packet_Type pt;
     struct timespec req;
     int packets = 0;
-    time_t curr, last_json, last_stat, last_expire;
+    time_t curr, last_json, last_stat;
     int m_CrossFeedFailed = 0;
     int m_CrossFeedSent = 0;
     double d1, d2, secs, d3;
     // uint32_t RM = 0x53464746;    // GSGF
-    last_json = last_stat =last_expire = 0;
+    last_json = last_stat = 0;
     //pilot_ttl = m_PlayerExpires;
     // verbosity = 9; // bump verbosity - VERY NOISY
     if (stat(tf,&buf)) {
@@ -297,9 +298,23 @@ int load_packet_log()
         if (do_sleep_10) {
             // throttle send rate - give receiver a chance
             req.tv_sec = 0;
-            req.tv_nsec = 10000000;
+            req.tv_nsec = ms_sleep * 1000000;
             nanosleep( &req, 0 ); // give over the CPU for 10 ms
             // this gives a rate of about 60 pkts/s...
+        }
+        if (curr >= last_stat) {
+            last_stat = curr + stat_delay;
+            d2 = get_seconds();
+            secs = d2 - d1;
+            if (secs > 0.0) {
+                d3 = (double)m_CrossFeedSent / secs;
+                SPRTF("%s: Sent %d packets, (f=%d) in %s, at %.2f pkts/sec\n", mod_name, m_CrossFeedSent, m_CrossFeedFailed,
+                    get_seconds_stg(secs), d3);
+            }
+        }
+        if (curr != last_json) {
+            // Write_JSON();
+            last_json = curr;
         }
     }
     free(tb);

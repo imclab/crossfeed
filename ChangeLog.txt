@@ -1,3 +1,10 @@
+2012/12/28 10:43:53
+
+    * Due to temporary outage of fgx.ch server, establish a repo at 
+      gitorious.org/fgtools to be able to devel in both linux and WIN32
+    * Cut in http handling from test_http.cxx
+    * Bumped AGE to 19.
+
 2012/12/22 18:34:40
 
     * Add a URI of /info to get a json information string. At present 
