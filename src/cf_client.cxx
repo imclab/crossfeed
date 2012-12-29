@@ -273,7 +273,11 @@ void give_help( char *pname )
 
     printf("\nMiscellaneous:\n");
     printf(" --help     (-h, -?) = This HELP and exit 0\n");
-    printf(" --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=%d)\n",
+    printf(" --call         (-c) = Set to modify CALLSIGN. (def=%s)\n",
+        (m_Modify_CALLSIGN ? "On" : "Off"));
+    printf(" --air          (-a) = Set to modify AIRCRAFT. (def=%s)\n",
+        (m_Modify_AIRCRAFT ? "On" : "Off"));
+   printf(" --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=%d)\n",
         (int)m_PlayerExpires );
 #ifndef _MSC_VER
     printf(" --daemon       (-d) = Run as daemon. (def=%s)\n", (RunAsDaemon ? "on" : "off"));
@@ -591,6 +595,16 @@ int parse_commands( int argc, char **argv )
                 } else
                     verbosity++;
                 if (VERB1) printf("%s: Set verbosity to %d\n", mod_name, verbosity);
+                break;
+            case 'c':
+                m_Modify_CALLSIGN = true;
+                if (VERB1) printf("%s: Set to modify CALLSIGN %s.\n", mod_name,
+                    (m_Modify_CALLSIGN ? "On" : "Off"));
+                break;
+            case 'a':
+                m_Modify_AIRCRAFT = true;
+                if (VERB1) printf("%s: Set to modify AIRCRAFT %s.\n", mod_name,
+                    (m_Modify_AIRCRAFT ? "On" : "Off"));
                 break;
             default:
                 goto Bad_ARG;
@@ -1653,11 +1667,11 @@ std::string get_info_json()
         s += cp;
     }
     // what else to ADD - maybe stats
-//#if defined(USE_POSTGRESQL_DATABASE) // TODO || defined(USE_SQLITE3_DATABASE))
-//    if (Enable_SQL_Tracker) {
-//        add_thread_stats_json(s);
-//    }
-//#endif
+#if defined(USE_POSTGRESQL_DATABASE) // TODO || defined(USE_SQLITE3_DATABASE))
+    if (Enable_SQL_Tracker) {
+        add_thread_stats_json(s);
+    }
+#endif
 
     s += "}]\n";
     s += ",\"ips\":[\n";
@@ -1667,10 +1681,6 @@ std::string get_info_json()
     s += ",\"ip_stats\":[{";
     add_ip_stats(s);
     s += "}]\n";
-
-    //s += ",\"browser_stats\":[{";
-    //add_br_stats(s);
-    //s += "}]\n";
 
     s += "}\n";
     return s;
@@ -1685,8 +1695,9 @@ void set_init_json()
     sprintf(EndBuf(cp),"\t\"min_speed_kt\":%d,\n", m_MinSpdChange_kt);
     sprintf(EndBuf(cp),"\t\"min_hdg_chg_deg\":%d,\n", m_MinHdgChange_deg);
     sprintf(EndBuf(cp),"\t\"min_alt_chg_ft\":%d,\n", m_MinAltChange_ft);
-    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", 
-        (tracker_log ? tracker_log : "none"));
+    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log ? tracker_log : "none"));
+    sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = false;
+    sprintf(EndBuf(cp),",\n\t\"modify_aircraft\":%s", (m_Modify_AIRCRAFT ? "true" : "false"));  // def = false;
 #ifdef USE_POSTGRESQL_DATABASE
     if (Enable_SQL_Tracker)
         sprintf(EndBuf(cp),",\n\t\"tracker_db\":\"%s\"\n", get_pg_db_name());
@@ -2181,9 +2192,9 @@ int load_test_file()
 
 
 /* ----
-   To run in Debug MSVC, need to add PATH=%PATH%;C:\Program Files (x86)\PostgreSQL\9.1\bin 
-   plus maybe ;C:\FG\17\3rdParty\bin if threads are used
-   to the runtime environment of MSVC
+   To run in Debug MSVC, need to add to environment
+   PATH=%PATH%;C:\Program Files (x86)\PostgreSQL\9.1\bin;C:\FG\17\3rdParty\bin
+   or as necessary to suit your setup.
    ---- */
 ////////////////////////////////////////////////////////
 // Entry for OS

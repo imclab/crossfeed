@@ -1,4 +1,5 @@
 #
+# 20121229 - fork to 'crossfeed', and set USE_SIMGEAR_LIB on by default.
 # 20121213 - commence to work with postgresql, ON by default - build test_pg app
 # 20121211 - 20121106 - 20121026 - 20121017 - Project fgms crossfeed client - cf_client
 #
@@ -7,7 +8,7 @@ cmake_minimum_required (VERSION 2.6)
 project (cf_client)
 
 option( BUILD_SERVER            "Build the presently not used server module" OFF)
-option (USE_SIMGEAR_LIB         "Set ON to link with SimGear"                OFF)
+option (USE_SIMGEAR_LIB         "Set ON to link with SimGear"                 ON)
 option (USE_GEOGRAPHIC_LIB      "Set ON to link with Geographic libarary."    ON)
 option (USE_POSTGRESQL_DATABASE "Set ON to link with postgresql lib."         ON)
 option (USE_SQLITE3_DATABASE    "Set ON to link with sqlite3 library."       OFF)

@@ -1,3 +1,10 @@
+2012/12/29 13:17:11
+
+    * Set default modifying callsign and aircraft to OFF.
+    * Add cf_feed, to be able to feed raw packets to cf_client from a 
+      raw packet log, without the need to run fgms.
+    * Bumped AGE to 20.
+
 2012/12/28 10:43:53
 
     * Due to temporary outage of fgx.ch server, establish a repo at 

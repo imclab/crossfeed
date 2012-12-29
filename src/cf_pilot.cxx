@@ -105,6 +105,8 @@ double m_MinDistance_m = 2000.0;  // started at 100.0;   // got movement (meters
 int m_MinSpdChange_kt = 20;
 int m_MinHdgChange_deg = 1;
 int m_MinAltChange_ft = 100;
+bool m_Modify_CALLSIGN = false;
+bool m_Modify_AIRCRAFT = false;
 
 enum Pilot_Type {
     pt_Unknown,
@@ -790,8 +792,16 @@ Packet_Type Deal_With_Packet( char *packet, int len )
         if (alt <= -9990.0) {
             return pkt_InvHgt;
         }
-        strcpy(pp->aircraft,get_Model(PosMsg->Model));
-        strcpy(pp->callsign,get_CallSign(MsgHdr->Callsign));
+
+        if (m_Modify_CALLSIGN)
+            strcpy(pp->callsign,get_CallSign(MsgHdr->Callsign));
+        else
+            strcpy(pp->callsign,MsgHdr->Callsign);
+        if (m_Modify_AIRCRAFT)
+            strcpy(pp->aircraft,get_Model(PosMsg->Model));
+        else
+            strcpy(pp->aircraft,PosMsg->Model);
+
         if (pp->callsign[0] == 0) {
             return pkt_InvStg1;
         } else if (pp->aircraft[0] == 0) {
