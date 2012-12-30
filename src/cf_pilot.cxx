@@ -325,7 +325,8 @@ static PJSONSTR _s_pJsonStg = 0;
 
 const char *header = "{\"success\":true,\"source\":\"cf-client\",\"last_updated\":\"%s\",\"flights\":[\n";
 const char *tail   = "]}\n";
-const char*json_stg = "{\"fid\":\"%s\",\"callsign\":\"%s\",\"lat\":\"%f\",\"lon\":\"%f\",\"alt_ft\":\"%d\",\"model\":\"%s\",\"spd_kts\":\"%d\",\"hdg\":\"%d\",\"dist_nm\":\"%d\"}";
+const char*json_stg_org = "{\"fid\":\"%s\",\"callsign\":\"%s\",\"lat\":\"%f\",\"lon\":\"%f\",\"alt_ft\":\"%d\",\"model\":\"%s\",\"spd_kts\":\"%d\",\"hdg\":\"%d\",\"dist_nm\":\"%d\"}";
+const char*json_stg = "{\"fid\":%s,\"callsign\":\"%s\",\"lat\":%f,\"lon\":%f,\"alt_ft\":%d,\"model\":\"%s\",\"spd_kts\":%d,\"hdg\":%d,\"dist_nm\":%d}";
 
 void Realloc_JSON_Buf(PJSONSTR pjs, int len)
 {
