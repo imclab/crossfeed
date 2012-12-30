@@ -1,3 +1,10 @@
+2012/12/30 15:26:01
+
+    * Remove quotes from around json numbers
+    * Add listen, http and telent addr/port to 'info' json
+    * Add UI command to cf_feed.cxx
+    * Bumped AGE to 21.
+
 2012/12/29 13:17:11
 
     * Set default modifying callsign and aircraft to OFF.
