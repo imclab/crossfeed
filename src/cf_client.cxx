@@ -1698,6 +1698,17 @@ void set_init_json()
     sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log ? tracker_log : "none"));
     sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = false;
     sprintf(EndBuf(cp),",\n\t\"modify_aircraft\":%s", (m_Modify_AIRCRAFT ? "true" : "false"));  // def = false;
+    sprintf(EndBuf(cp),",\n\t\"listen_addr\":\"%s\"", (m_ListenAddress.size() ? m_ListenAddress.c_str() : "IPADDR_ANY"));
+    sprintf(EndBuf(cp),",\n\t\"listen_port\":%d", m_ListenPort);
+    if (m_HTTPPort > 0) {
+        sprintf(EndBuf(cp),",\n\t\"http_addr\":\"%s\"", (m_HTTPAddress.size() ? m_HTTPAddress.c_str() : "IPADDR_ANY"));
+        sprintf(EndBuf(cp),",\n\t\"http_port\":%d", m_HTTPPort);
+    }
+    if (m_TelnetPort > 0) {
+        sprintf(EndBuf(cp),",\n\t\"telnet_addr\":\"%s\"", (m_TelnetAddress.size() ? m_TelnetAddress.c_str() : "IPADDR_ANY"));
+        sprintf(EndBuf(cp),",\n\t\"telnet_port\":%d", m_TelnetPort);
+    }
+
 #ifdef USE_POSTGRESQL_DATABASE
     if (Enable_SQL_Tracker)
         sprintf(EndBuf(cp),",\n\t\"tracker_db\":\"%s\"\n", get_pg_db_name());
