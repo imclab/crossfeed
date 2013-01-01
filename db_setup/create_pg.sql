@@ -1,3 +1,4 @@
+-- 20120101 - Update to use VARCHAR(96) for the model
 
 DROP TABLE IF EXISTS flights, positions CASCADE;
 
@@ -49,3 +50,4 @@ from v_flights
 where status = 'OPEN'
 order by callsign;
 
+-- eof
