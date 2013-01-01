@@ -8,7 +8,7 @@ CREATE TABLE flights (
         f_pk SERIAL NOT NULL, 
         fid VARCHAR(24) NOT NULL, 
         callsign VARCHAR(16) NOT NULL, 
-        model VARCHAR(20), 
+        model VARCHAR(96), 
         status VARCHAR(20), 
         PRIMARY KEY (f_pk)
 );
