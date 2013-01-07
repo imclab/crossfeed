@@ -301,7 +301,8 @@ int add_records()
     int rc = 0;
     SPRTF("Adding %d records to 'flights'...\n", MX_FLT);
     if (add_begin_end) {
-        rc = db_exec("END;");
+        strcpy(statement,"END;");
+        rc = db_exec(statement);
         if (rc)
             return rc;
     }
@@ -340,8 +341,10 @@ int add_records()
         if (rc)
             return rc;
     }
-    if (add_begin_end)
-        rc = db_exec("BEGIN;");
+    if (add_begin_end) {
+        strcpy(statement,"BEGIN;");
+        rc = db_exec(statement);
+    }
     added_records = true;
     return rc;
 }

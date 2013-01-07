@@ -273,8 +273,8 @@ void give_help( char *pname )
 
     printf("\nMiscellaneous:\n");
     printf(" --help     (-h, -?) = This HELP and exit 0\n");
-    printf(" --call         (-c) = Set to modify CALLSIGN. (def=%s)\n",
-        (m_Modify_CALLSIGN ? "On" : "Off"));
+    //printf(" --call         (-c) = Set to modify CALLSIGN. (def=%s)\n",
+    //    (m_Modify_CALLSIGN ? "On" : "Off"));
     printf(" --air          (-a) = Set to modify AIRCRAFT. (def=%s)\n",
         (m_Modify_AIRCRAFT ? "On" : "Off"));
    printf(" --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=%d)\n",
@@ -487,10 +487,21 @@ int parse_commands( int argc, char **argv )
             case 'D':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    set_pg_db_name(sarg);
+                    // if NOT 'none' set database name
+                    if (strcmp(sarg,"none"))
+                        set_pg_db_name(sarg);
+                    else
+                        Enable_SQL_Tracker = false; // tracker database disabled
+
+                    if (VERB1) {
+                        if (Enable_SQL_Tracker)
+                            SPRTF("%s: Set PostgreSQL database to %s.\n", mod_name, get_pg_db_name());
+                        else
+                            SPRTF("%s: PostgreSQL database DISABLED.\n", mod_name);
+                    }
                     i++;
                 } else {
-                    SPRTF("database name must follow!\n");
+                    SPRTF("%s: ERROR: PostgreSQL database name must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -596,11 +607,11 @@ int parse_commands( int argc, char **argv )
                     verbosity++;
                 if (VERB1) printf("%s: Set verbosity to %d\n", mod_name, verbosity);
                 break;
-            case 'c':
-                m_Modify_CALLSIGN = true;
-                if (VERB1) printf("%s: Set to modify CALLSIGN %s.\n", mod_name,
-                    (m_Modify_CALLSIGN ? "On" : "Off"));
-                break;
+            //case 'c':
+            //    m_Modify_CALLSIGN = true;
+            //    if (VERB1) printf("%s: Set to modify CALLSIGN %s.\n", mod_name,
+            //        (m_Modify_CALLSIGN ? "On" : "Off"));
+            //    break;
             case 'a':
                 m_Modify_AIRCRAFT = true;
                 if (VERB1) printf("%s: Set to modify AIRCRAFT %s.\n", mod_name,
@@ -611,7 +622,7 @@ int parse_commands( int argc, char **argv )
             }
         } else {
 Bad_ARG:
-            SPRTF("ERROR: Unknown argument [%s]! Try -?\n",arg);
+            SPRTF("%s: ERROR: Unknown argument [%s]! Try -? Aborting...\n", mod_name, arg);
             exit(1);
         }
     }
@@ -1696,7 +1707,7 @@ void set_init_json()
     sprintf(EndBuf(cp),"\t\"min_hdg_chg_deg\":%d,\n", m_MinHdgChange_deg);
     sprintf(EndBuf(cp),"\t\"min_alt_chg_ft\":%d,\n", m_MinAltChange_ft);
     sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log ? tracker_log : "none"));
-    sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = false;
+    //sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = true;
     sprintf(EndBuf(cp),",\n\t\"modify_aircraft\":%s", (m_Modify_AIRCRAFT ? "true" : "false"));  // def = false;
     sprintf(EndBuf(cp),",\n\t\"listen_addr\":\"%s\"", (m_ListenAddress.size() ? m_ListenAddress.c_str() : "IPADDR_ANY"));
     sprintf(EndBuf(cp),",\n\t\"listen_port\":%d", m_ListenPort);

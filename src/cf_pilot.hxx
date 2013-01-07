@@ -39,7 +39,7 @@ extern double m_MinDistance_m;
 extern int m_MinSpdChange_kt;
 extern int m_MinHdgChange_deg;
 extern int m_MinAltChange_ft;
-extern bool m_Modify_CALLSIGN;  // def = false;
+//extern bool m_Modify_CALLSIGN;  // def = false;
 extern bool m_Modify_AIRCRAFT;  // def = false;
 
 enum Packet_Type {

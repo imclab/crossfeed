@@ -1,4 +1,5 @@
 #
+# 20130101 - back to fgx-cf on fgx.ch, and ONLY install the primary app, cf_client
 # 20121229 - fork to 'crossfeed', and set USE_SIMGEAR_LIB on by default.
 # 20121213 - commence to work with postgresql, ON by default - build test_pg app
 # 20121211 - 20121106 - 20121026 - 20121017 - Project fgms crossfeed client - cf_client
@@ -31,7 +32,7 @@ set (SERV_EXE cf_server)
 # The version number.
 set (cf_MAJOR 1)
 set (cf_MINOR 0)
-set (cf_AGE   21)
+set (cf_AGE   24)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
     message(FATAL_ERROR "*** ERROR: Only ONE of USE_POSTGRESQL_DATABASE or USE_SQLITE3_DATABASE can be enabled, NOT BOTH!")
@@ -267,7 +268,9 @@ if (USE_POSTGRESQL_DATABASE)
     list(APPEND CHDRS src/cf_pg.hxx)
     list(APPEND CSRCS src/cf_pg.cxx)
 endif (USE_POSTGRESQL_DATABASE)
+
 add_executable(${CLI_EXE} ${CSRCS} ${CHDRS})
+
 message (STATUS "*** target_link_libraries ( ${CLI_EXE} ${EXTRA_LIBS} )")
 target_link_libraries ( ${CLI_EXE} ${EXTRA_LIBS} )
 if (WIN32)
@@ -278,6 +281,7 @@ if(WIN32)
 else(WIN32)
     set (INST_DIR bin)
 endif(WIN32)
+
 install (TARGETS ${CLI_EXE} DESTINATION ${INST_DIR} )
 #####################################
 
@@ -285,11 +289,11 @@ if (BUILD_SERVER)
     set(SHDRS src/cf_server.hxx )
     set(SSRCS src/cf_server.cxx )
     add_executable(${SERV_EXE} ${SSRCS} ${SHDRS})
-    target_link_libraries (${SERV_EXE} cf_lib)
+    target_link_libraries (${SERV_EXE} ${EXTRA_LIBS})
     if (WIN32)
         set_target_properties( ${SERV_EXE} PROPERTIES DEBUG_POSTFIX "d" )
     endif (WIN32)
-    install (TARGETS ${SERV_EXE} DESTINATION ${INST_DIR} )
+    # install (TARGETS ${SERV_EXE} DESTINATION ${INST_DIR} )
 endif (BUILD_SERVER)
 message(STATUS "*** Will install binary to ${INST_DIR}")
 
@@ -302,7 +306,7 @@ target_link_libraries( test_sqlite ${EXTRA_LIBS} )
 if (WIN32)
     set_target_properties( test_sqlite PROPERTIES DEBUG_POSTFIX "d" )
 endif (WIN32)
-install( TARGETS test_sqlite DESTINATION bin )
+# install( TARGETS test_sqlite DESTINATION bin )
 endif (USE_SQLITE3_DATABASE)
 
 # build postgresql test_pg app
@@ -331,7 +335,7 @@ target_link_libraries ( test_http ${EXTRA_LIBS} )
 if (WIN32)
     set_target_properties ( test_http PROPERTIES DEBUG_POSTFIX "d" )
 endif (WIN32)
-install( TARGETS test_http DESTINATION bin )
+# install( TARGETS test_http DESTINATION bin )
 endif (ADD_HTTP_TEST)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
@@ -346,7 +350,7 @@ message(STATUS "*** target_link_libraries(sqlLi2Pg ${EXTRA_LIBS} )")
 if (WIN32)
     set_target_properties(sqlLi2Pg PROPERTIES DEBUG_POSTFIX "d" )
 endif (WIN32)
-install( TARGETS sqlLi2Pg DESTINATION bin )
+# install( TARGETS sqlLi2Pg DESTINATION bin )
 else (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
 message(STATUS "*** BOTH DATABASES NOT ON = No build of transfer app sqlLi2Pg")
 endif (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
@@ -358,6 +362,6 @@ target_link_libraries(cf_feed ${EXTRA_LIBS} )
 if (WIN32)
     set_target_properties(cf_feed PROPERTIES DEBUG_POSTFIX "d" )
 endif (WIN32)
-install( TARGETS cf_feed DESTINATION bin )
+# install( TARGETS cf_feed DESTINATION bin )
 
 # eof

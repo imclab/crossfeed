@@ -92,14 +92,12 @@ static const char *mod_name = "cf_feed.cxx";
 static 	netSocket *m_DataSocket;
 static std::string m_BindAddress = SERVER_ADDRESS;
 static int m_ListenPort = SERVER_PORT;
-static int verbosity = 0;
+static int m_verbosity = 0;
 
-#ifndef VERB1
-#define VERB1 (verbosity >= 1)
-#define VERB2 (verbosity >= 2)
-#define VERB5 (verbosity >= 5)
-#define VERB9 (verbosity >= 9)
-#endif
+#define M_VERB1 (m_verbosity >= 1)
+#define M_VERB2 (m_verbosity >= 2)
+#define M_VERB5 (m_verbosity >= 5)
+#define M_VERB9 (m_verbosity >= 9)
 
 class mT_Relay {
 public:
@@ -251,7 +249,7 @@ int load_packet_log()
     // uint32_t RM = 0x53464746;    // GSGF
     last_json = last_stat = 0;
     //pilot_ttl = m_PlayerExpires;
-    // verbosity = 9; // bump verbosity - VERY NOISY
+    // m_verbosity = 9; // bump m_verbosity - VERY NOISY
     if (stat(raw_log,&buf)) {
         SPRTF("stat of %s file failed!\n",raw_log);
         return 1;
@@ -424,7 +422,7 @@ int parse_args(int argc, char **argv)
                     sarg = argv[i2];
                     raw_log = strdup(sarg);
                     i++;
-                    if (VERB1) SPRTF("%s: Raw log to %s\n", mod_name, raw_log);
+                    if (M_VERB1) SPRTF("%s: Raw log to %s\n", mod_name, raw_log);
                 } else {
                     printf("ERROR: FILE name must follow\n");
                     goto Bad_Arg;
@@ -438,7 +436,7 @@ int parse_args(int argc, char **argv)
                     else
                         m_BindAddress = sarg;
                     i++;
-                    if (VERB1) SPRTF("%s: Bind address to %s\n", mod_name,
+                    if (M_VERB1) SPRTF("%s: Bind address to %s\n", mod_name,
                         (m_BindAddress.size() ? m_BindAddress.c_str() : "INADDR_ANY"));
                 } else {
                     printf("ERROR: IP address must follow\n");
@@ -449,7 +447,7 @@ int parse_args(int argc, char **argv)
                 if (i2 < argc) {
                     sarg = argv[i2];
                     m_ListenPort = atoi(sarg);
-                    if (VERB1) SPRTF("%s: Bind port to %s\n", mod_name, m_ListenPort);
+                    if (M_VERB1) SPRTF("%s: Bind port to %s\n", mod_name, m_ListenPort);
                     i++;
                 } else {
                     printf("ERROR: PORT value must follow\n");
@@ -460,7 +458,7 @@ int parse_args(int argc, char **argv)
                 if (i2 < argc) {
                     sarg = argv[i2];
                     ms_sleep = atoi(sarg);
-                    if (VERB1) SPRTF("%s: Set ms throttle to %d\n", mod_name, ms_sleep);
+                    if (M_VERB1) SPRTF("%s: Set ms throttle to %d\n", mod_name, ms_sleep);
                     i++;
                 } else {
                     printf("ERROR: THROTTLE value, integer milliseconds must follow\n");
@@ -472,18 +470,18 @@ int parse_args(int argc, char **argv)
                 if (*sarg) {
                     // expect digits
                     if (is_digits(sarg)) {
-                        verbosity = atoi(sarg);
+                        m_verbosity = atoi(sarg);
                     } else if (*sarg == 'v') {
-                        verbosity++; /* one inc for first */
+                        m_verbosity++; /* one inc for first */
                         while(*sarg == 'v') {
-                            verbosity++;
+                            m_verbosity++;
                             arg++;
                         }
                     } else
                         goto Bad_Arg;
                 } else
-                    verbosity++;
-                if (VERB1) printf("%s: Set verbosity to %d\n", mod_name, verbosity);
+                    m_verbosity++;
+                if (M_VERB1) printf("%s: Set m_verbosity to %d\n", mod_name, m_verbosity);
                 break;
             default:
                 goto Bad_Arg;

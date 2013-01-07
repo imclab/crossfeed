@@ -63,9 +63,12 @@ typedef std::vector<std::string> vSTG;
 // thread variables
 pthread_mutex_t msg_mutex     = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  condition_var = PTHREAD_COND_INITIALIZER;
-vTMSG msg_queue; // queue for messages
-vTMSG own_queue; // internal private queue
-vSTG stmt_queue; // pending statements
+static vTMSG msg_queue; // queue for messages
+static vTMSG own_queue; // internal private queue
+// vSTG stmt_queue; // pending statements
+
+static size_t own_max = 0;
+static size_t own_ii = 0;
 
 bool keep_thread_alive = true;
 pthread_t thread_id;
@@ -76,6 +79,7 @@ int iBusy_Retries = 0;
 size_t high_water = 0;
 size_t total_handled = 0;
 size_t total_received = 0;
+bool skip_final_on_exit = true;
 
 #ifdef _MSC_VER  // include windows pthread library
 #pragma comment ( lib, "pthreadVC2.lib" )
@@ -97,15 +101,15 @@ size_t total_received = 0;
 #endif
 
 #ifndef DEF_DATABASE
-#define DEF_DATABASE "tracker_test"
+#define DEF_DATABASE "crossfeed"
 #endif
 
 #ifndef DEF_USER_LOGIN
-#define DEF_USER_LOGIN "cf"
+#define DEF_USER_LOGIN "crossfeed"
 #endif
 
 #ifndef DEF_USER_PWD
-#define DEF_USER_PWD "Bravo747g"
+#define DEF_USER_PWD "crossfeed"
 #endif
 
 static char *ip_address = (char *)DEF_IP_ADDRESS;
@@ -146,7 +150,8 @@ static const char *ct_positions = "CREATE TABLE positions ("
    --------------------------------------------------- */
 
 //////////////////////////////////////////////////////////
-static cf_postgres ldb;
+static cf_postgres _s_ldb;
+cf_postgres *get_db_instance() { return &_s_ldb; }
 /////////////////////////////////////////////////////////
 
 int The_Callback_NOT_USED(void *a_param, int argc, char **argv, char **column)
@@ -161,7 +166,7 @@ int The_Callback_NOT_USED(void *a_param, int argc, char **argv, char **column)
 int open_pg()
 {
     int rc = 0;
-    cf_postgres *ppg = &ldb;
+    cf_postgres *ppg = get_db_instance();
     if (ppg->db_open()) {
         SPRTF("Open PG DB [%s] FAILED!\n", database);
         rc = 1;
@@ -171,7 +176,7 @@ int open_pg()
 
 void close_pg()
 {
-    cf_postgres *ppg = &ldb;
+    cf_postgres *ppg = get_db_instance();
     ppg->db_close();
 }
 
@@ -196,7 +201,7 @@ int db_init()
     SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], pwd [%s]\n",
     ip_address, port, database, user, pwd );
 
-    cf_postgres *ppg = &ldb;
+    cf_postgres *ppg = get_db_instance();
 
     if (strcmp(ip_address,DEF_PG_IP))
         ppg->set_db_host(ip_address);
@@ -210,6 +215,9 @@ int db_init()
         ppg->set_db_name(database);
 
     rc = open_pg();
+    if (rc) return rc;
+
+    rc = ppg->db_exec("UPDATE flights SET status='CLOSED' WHERE status='OPEN';");
 
     return rc;
 }
@@ -277,7 +285,7 @@ int db_message( PDATAMSG pdm )
     }
     // execute the prepared statements
     int i;
-    cf_postgres *ppg = &ldb;
+    cf_postgres *ppg = get_db_instance();
     for (i = 0; i < 3; i++) {
         char *cp = psb->stmt[i];
         if (!*cp) continue;
@@ -317,18 +325,21 @@ void add_thread_stats_json(std::string &s)
     char *cp = _buf;
     if (!total_received || !total_handled)
         return;
-    s += ",\n\t\"flights_received\":\"";
+    s += ",\n\t\"flights_received\":";
     sprintf(cp,"%ld",total_received);
     s += cp;
-    s += "\"";
-    s += ",\n\t\"flights_handled\":\"";
+    s += ",\n\t\"flights_handled\":";
     sprintf(cp,"%ld",total_handled);
     s += cp;
-    s += "\"";
-    s += ",\n\t\"high_water\":\"";
+    s += ",\n\t\"high_water\":";
     sprintf(cp,"%ld",high_water);
     s += cp;
-    s += "\"";
+    s += ",\n\t\"own_max\":";
+    sprintf(cp,"%ld",own_max);
+    s += cp;
+    s += ",\n\t\"own_ii\":";
+    sprintf(cp,"%ld",own_ii);
+    s += cp;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -339,7 +350,6 @@ void add_thread_stats_json(std::string &s)
 // work...
 //
 //////////////////////////////////////////////////////////////////////////////
-bool skip_final_on_exit = true;
 void *Tracker_Func(void *vp)
 {
     size_t max, ii, i2;
@@ -358,10 +368,11 @@ void *Tracker_Func(void *vp)
         }
         msg_queue.clear(); // clear down the message queue
         pthread_mutex_unlock( &msg_mutex ); // unlock the mutex
-        max = own_queue.size();
+
+        own_max = own_queue.size();
         res = 0;
-        for (ii = 0; ii < max; ii++) {
-            pdm = own_queue[ii]; // get pointer
+        for (own_ii = 0; own_ii < own_max; own_ii++) {
+            pdm = own_queue[own_ii]; // get pointer
             res = db_message(pdm);
             delete pdm;
             if (!keep_thread_alive && skip_final_on_exit) {
@@ -370,16 +381,16 @@ void *Tracker_Func(void *vp)
             if (res)
                 break;
         }
-        if (ii < max) {
-            i2 = ii + 1; // in exit situation
-            for (; i2 < max; i2++) {
+        if (own_ii < own_max) {
+            i2 = own_ii + 1; // in exit situation
+            for (; i2 < own_max; i2++) {
                 pdm = own_queue[i2];
                 delete pdm; // clean up memory
             }
         }
-        max = ii;
+
         own_queue.clear();  // clear down internal queue
-        total_handled += max;
+        total_handled += own_ii;
         if (res) {
             close_pg(); // close on exit
             SPRTF("CRITICAL ERROR: Aborting at %s UTC\n", Get_Current_UTC_Time_Stg());

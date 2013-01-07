@@ -24,8 +24,8 @@ public:
     void db_close();
     int db_ok();
     char *get_db_name() { return db_name; }
-    int db_exec( const char *sql, SQLCB sqlcb,
-                    void *vp, char **errmsg = 0, double *diff = 0 );
+    int db_exec( const char *sql, SQLCB sqlcb = 0,
+                    void *vp = 0, char **errmsg = 0, double *diff = 0 );
     void set_sql_cb( SQLCB sqlcb ) { sql_cb = sqlcb; }
     int query_count;
     double total_secs_in_query;

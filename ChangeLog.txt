@@ -1,3 +1,21 @@
+2013/01/05 14:27:55
+
+    * Due to a ' character in the callsign broke the sql statement,
+      restored some callsign modification. Now accept ALL alpha-numeric 
+      chars, plus '-' and '_'.
+    * Bumped AGE to 24.
+
+2013/01/04 12:56:01
+
+    * Allow '-D none' to DISABLE PostgreSQL tracker database.
+    * Bumped AGE to 23.
+
+2013/01/03 11:18:32
+
+    * On database init, ensure all OPEN flights are CLOSED
+    * Only install the primary app, cf_client
+    * Bumped AGE to 22.
+
 2012/12/30 15:26:01
 
     * Remove quotes from around json numbers

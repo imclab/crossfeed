@@ -105,7 +105,7 @@ double m_MinDistance_m = 2000.0;  // started at 100.0;   // got movement (meters
 int m_MinSpdChange_kt = 20;
 int m_MinHdgChange_deg = 1;
 int m_MinAltChange_ft = 100;
-bool m_Modify_CALLSIGN = false;
+//bool m_Modify_CALLSIGN = true;  // Do need SOME modification (for SQL and json)
 bool m_Modify_AIRCRAFT = false;
 
 enum Pilot_Type {
@@ -669,7 +669,13 @@ char *get_Model( char *pm )
 
 //////////////////////////////////////////////////////////////////////
 // Filter CALLSIGN to ONLY ALPHA-NUMERIC (English) characters
-#define ISUALPHANUM(a) (((a >= 'A') && (a <= 'Z')) || ((a >= '0') && (a <= '9')))
+// 20130105 - allow lowercase, and '-' or '_'
+#define ISUA(a)  ((a >= 'A') && (a <= 'Z'))
+#define ISLA(a)  ((a >= 'a') && (a <= 'z'))
+#define ISNUM(a) ((a >= '0') && (a <= '9'))
+#define ISSPL(a) ((a == '-') || (a == '_'))
+#define ISOK(a) (ISUA(a) || ISLA(a) || ISNUM(a) || ISSPL(a)) 
+
 char *get_CallSign( char *pcs )
 {
     static char _s_callsign[MAX_CALLSIGN_LEN+2];
@@ -677,9 +683,9 @@ char *get_CallSign( char *pcs )
     char *cp = _s_callsign;
     off = 0;
     for (i = 0; i < MAX_CALLSIGN_LEN; i++) {
-        c = toupper(pcs[i]);
+        c = pcs[i];
         if (!c) break; // end on a null
-        if (ISUALPHANUM(c)) {
+        if (ISOK(c)) { // is acceptable char
             cp[off++] = (char)c;
         }
     }
@@ -794,10 +800,7 @@ Packet_Type Deal_With_Packet( char *packet, int len )
             return pkt_InvHgt;
         }
 
-        if (m_Modify_CALLSIGN)
-            strcpy(pp->callsign,get_CallSign(MsgHdr->Callsign));
-        else
-            strcpy(pp->callsign,MsgHdr->Callsign);
+        strcpy(pp->callsign,get_CallSign(MsgHdr->Callsign));
         if (m_Modify_AIRCRAFT)
             strcpy(pp->aircraft,get_Model(PosMsg->Model));
         else
