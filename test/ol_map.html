@@ -1,0 +1,255 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+  <meta http-equiv="Content-Type"
+        content="text/html; charset=us-ascii" />
+  <title>
+   OL Map Tests
+  </title>
+  <link rel="stylesheet"
+        href="css/ol_style.css"
+        type="text/css" />
+  <link rel="stylesheet"
+        href="css/ol_reset.css"
+        type="text/css" />
+  <style type="text/css">
+/*<![CDATA[*/
+  <!-- 
+  td            { vertical-align: top; }
+  .redb         { color: #FF0000; font-family: Arial; font-weight: bold; }
+  input         { text-align: right; width: 6em; }
+  input         { background-color: #f0f0f0; }
+  output        { color: #000099; font-weight: bold; }
+  .inputs       { float: left; margin: 1em 2em 0 0; }
+  .outputs      { margin: 1em 2em 0 0; }
+  .hidden       { display: none; }
+  .clear-floats { clear: both; }
+  #scaleline-id { margin: 10px; font-size: xx-small; }
+  .bf           { font-size: 2.5em; font-weight: bold; } /* 40px/16=2.5em */
+  -->
+  /*]]>*/
+  </style>
+  <script src="js/jquery-1.9.0.min.js"
+        type="text/javascript">
+</script>
+  <script src="js/geodesic.js"
+        type="text/javascript">
+</script>
+  <script src="js/OpenLayers2110.js"
+        type="text/javascript">
+</script><!-- <script src="js/OpenLayers2091.js" type="text/javascript"></script> -->
+  <!-- <script src="http://static.fgx.ch/js/OpenLayers-2.11/OpenLayers.js"></script> -->
+
+  <script type="text/javascript">
+//<![CDATA[
+
+        var map, layer, lnLayer, ptLayer, lineFeature;
+        var drawn = false;
+        //var clickControl = new OpenLayers.Control.Click( { trigger: function(e) {
+        //    var lonlat = map.getLonLatFromViewPortPx(e.xy);
+        //    setMarker(lonlat);
+        //    }});
+            
+        //function init(){
+        function init(lon,lat,zoom){
+            map = new OpenLayers.Map( 'map' );
+            layer = new OpenLayers.Layer.WMS( "OpenLayers WMS",
+                    "http://labs.metacarta.com/wms/vmap0",
+                    {layers: 'basic'} );
+            map.addLayer(layer);
+            
+             // we want opaque external graphics and non-opaque internal graphics
+            var layer_style = OpenLayers.Util.extend({}, OpenLayers.Feature.Vector.style['default']);
+            layer_style.fillOpacity = 0.2;
+            layer_style.graphicOpacity = 1;
+            
+            lnLayer = new OpenLayers.Layer.Vector("Line Layer");
+            map.addLayer(lnLayer);
+            //lineLayer = new OpenLayers.Layer.Vector("Line Layer");
+            //lineLayer = new OpenLayers.Layer.Vector("Line Layer", {style: layer_style});
+            //ptLayer = new OpenLayers.Layer.Vector("Point Layer");
+            //map.addLayer(ptLayer);
+            
+            map.addControl(new OpenLayers.Control.Permalink('permalink'));
+            map.addControl(new OpenLayers.Control.MousePosition());
+            
+            //var mousectl = new OpenLayers.Control.MousePosition({
+            //    div: document.getElementById('external_control') });
+            //map.addControl(mousectl);
+
+            //var scaleline = new OpenLayers.Control.ScaleLine({
+            //    div: document.getElementById('scaleline-id') });
+            //map.addControl(scaleline);
+            
+            //map.addControl(clickControl);
+            //clickControl.activate();
+            // register: function (type, obj, func [, priority]);
+            // type = browser events, like 'moveend' = end of dragging
+            //map.events.register("moveend", null, displayZoom);
+            
+            // set intital postion and size (zoom level)
+            // map.zoomToMaxExtent();
+            // map.zoomTo(2);
+            if (zoom.length == 0) { zoom = 5; }  // set default ZOOM
+            var centerpoint;
+            if (lon.length && lat.length) {     // if URL contains lon,lat points
+                centerpoint = new OpenLayers.LonLat(lon,lat); // user center point
+            } else {
+                centerpoint = new OpenLayers.LonLat(1.0,50.0); // get a default center
+            }
+            map.setCenter(centerpoint,zoom); 
+            //setZoom(zoom);
+        
+  /* ============= FAILS =============
+            OpenLayers.Control.Click = OpenLayers.Class(OpenLayers.Control, {                
+                defaultHandlerOptions: {
+                    'single': true,
+                    'double': false,
+                    'pixelTolerance': 0,
+                    'stopSingle': false,
+                    'stopDouble': false
+                },
+                initialize: function(options) {
+                    this.handlerOptions = OpenLayers.Util.extend(
+                        {}, this.defaultHandlerOptions
+                    );
+                    OpenLayers.Control.prototype.initialize.apply(
+                        this, arguments
+                    ); 
+                    this.handler = new OpenLayers.Handler.Click(
+                        this, {
+                            'click': this.trigger
+                        }, this.handlerOptions
+                    );
+                }, 
+                trigger: function(e) {
+                    var lonlat = map.getLonLatFromViewPortPx(e.xy);
+                    alert("You clicked near " + lonlat.lat + " N, " +
+                                              + lonlat.lon + " E");
+                }
+            });
+    =================================== */
+    
+        }
+        
+        //function setZoom(zoom) {
+        //    document.getElementById("zoom").innerHTML = zoom;
+        //}
+        
+        //function displayZoom() {
+        //    var zoom = map.zoom.toFixed(4);
+        //    setZoom(zoom);
+        //}
+        // The good old GUP function by Geoff McLane
+        function gup( name ) {
+        name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+        var regexS = "[\\?&]"+name+"=([^&#]*)";
+        var regex = new RegExp( regexS );
+        var results = regex.exec( window.location.href );
+        if( results == null )
+            return "";
+        else
+            return results[1];
+        }
+        
+        var lineStyle = {
+            strokeColor: '#0000ff',
+            strokeOpacity: 0.5,
+            strokeWidth: 2
+        };
+        function paintLine( lat1, lon1, lat2, lon2 ) {
+            var obj = document.getElementById('Draw');
+            if (drawn) {
+                lnLayer.removeFeatures(lineFeature);
+                drawn = false;
+                obj.innerHTML = "Draw";
+            } else {
+                var points = new Array(
+                    new OpenLayers.Geometry.Point(lon1, lat1),
+                    new OpenLayers.Geometry.Point(lon2, lat2)
+                );
+                var line = new OpenLayers.Geometry.LineString(points);
+                lineFeature = new OpenLayers.Feature.Vector(line, null, lineStyle);
+                lnLayer.addFeatures(lineFeature);
+                drawn = true;
+                obj.innerHTML = "Remove";
+            }            
+        }
+        
+        function setMarker(lonlat) {
+            var obj = document.getElementById('clicked');
+            //var msg = "Lat: "+lonlat.lat.+", Lon: "+lonlat.lon;
+            var msg = lonlat.toString;
+            var px = map.getPixelFromLonLat(lonlat);
+            msg += " Pxy: "+px.toString;
+            obj.innerHTML = msg;
+        }
+  //]]>
+  </script>
+ </head><!-- <body onload="init()"> -->
+
+ <body>
+  <h1 id="title">
+   OpenLayers Feature Testing
+  </h1>
+
+  <div id="tags">
+  </div>
+
+  <div id="shortdesc">
+   Demonstration of 'drawing' and 'removing' a line feature to/from a map.
+  </div>
+
+  <div id="map"
+       class="smallmap">
+  </div>
+  <!-- <p>
+   Zoom : <span id="zoom">&nbsp;</span>
+  </p> -->
+  <!-- <div id="docs">
+   This example uses a WMS base layer, with various tests added. Like add a line...
+  </div> -->
+  <!-- <p>Mouse: <span id="external_control">position, when mouse moves on map</span></p>
+    <div id="scaleline-id"></div> -->
+
+  <p>
+   &nbsp;
+  </p>
+
+  <p>
+   Track from EGKK London Gatwick 51.148753,-0.1924725 to LFPO Paris Orly 48.72698,2.370448
+   <br />
+   <span class="bf">Action:</span> <a href="#"
+      onclick="paintLine(51.148753,-0.1924725,48.72698,2.370448);"><span class="bf"
+         id="Draw">Draw</span></a>
+  </p>
+
+  <p>
+   &nbsp;
+  </p>
+
+  <p>
+   <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-xhtml10"
+        alt="Valid XHTML 1.0 Strict"
+        height="31"
+        width="88" /></a>
+        <a href="http://tidy.sourceforge.net"><img src="images/checked_by_tidy.gif"
+        border="0"
+        alt="Checked by Tidy!"
+        height="32"
+        width="32" /></a>
+  </p>
+  <!-- This gives IE compatibility with the OpenLayers map init function -->
+  <script type="text/javascript"
+        defer="defer">
+//<![CDATA[
+        var lat = gup('lat');
+        var lon = gup('lon');
+        var zoom = gup('zoom');
+        init(lon,lat,zoom);
+               // sendRequest("http://crossfeed.fgx.ch/data")
+  //]]>
+  </script>
+ </body>
+</html>

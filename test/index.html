@@ -1,0 +1,213 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+ <head>
+  <title>
+   Crossfeed JSON Testing
+  </title>
+  <meta http-equiv="Content-Type"
+        content="text/html; charset=us-ascii">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  <meta name="apple-mobile-web-app-capable"
+        content="yes">
+  <script type="text/javascript"
+        src="http://static.fgx.ch/js/jquery-1.8.3/jquery-1.8.3.min.js">
+</script><!--
+             ,MMN,    ...................................................................................
+              ,MMM,           CROSSFEED CLIENT MAPPING TESTSUITE: FULL SCREEN MAP
+               JMMN,
+       .gg,      MMMM,         These files are written for testing and develop
+       .MMN  .....jMMMMa.......    the crossfeed client (written by Geoff McLane) of FlightGear
+      .TMMMMMMMMMMMMMMMMMMMMMMM@     Multiplayer Server (written by Oliver Schroeder). 
+       .MMF    `?WMMMM"7??!`       See http://www.fgx.ch for more information.
+       ?""`      dMMM'          (c) 2013 Yves Sablonier, Zurich
+               .MMM'       Licence: GPLv2 or later
+              .MMM'     http://www.gnu.org/licenses/gpl.txt
+             .MMM'     ............................................
+
+      Please do not remove this copyright and license information from this source in any case.
+      For OpenLayers (FreeBSD license) and jQuery (MIT license) please follow this links:
+      http://openlayers.org, http://jquery.org
+      ........................................................................................
+-->
+  <!-- <link rel="stylesheet" href="./css/stylesheet.css" type="text/css"> -->
+  <!-- <link rel="stylesheet" href="http://static.fgx.ch/js/OpenLayers-2.12/theme/default/style.css" type="text/css"> -->
+
+  <script src="http://static.fgx.ch/js/OpenLayers-2.11/OpenLayers.js"
+        type="text/javascript">
+</script>
+  <script type="text/javascript">
+var map;  
+        
+  </script>
+  <style type="text/css">
+
+  body { 
+  background-image : url('images/clds3.jpg');
+  margin : 0 1cm 0 1cm;
+  text-align : justify;
+  } 
+
+  h1 { 
+  background : #efefef;
+  border-style : solid solid solid solid;
+  border-color : #d9e2e2;
+  border-width : 1px;
+  padding : 2px 2px 2px 2px;
+  font-size : 300%;
+  text-align : center;
+  } 
+
+  h2 { 
+  font-size : 16pt;
+  font-weight : bold;
+  background-color : #ccccff;
+  } 
+        
+  a {
+  font-weight : bold;
+  }
+  </style>
+ </head>
+ <body>
+  <h1>
+   Crossfeed JSON Testing
+  </h1>
+
+  <h2>
+   Preamble
+  </h2>
+
+  <p>
+   This source provides an easy feed of all flights being handled by a <a target="_blank"
+      href="http://www.flightgear.org/">FlightGear</a> Multiplayer (fgms - <a target="_blank"
+      href="http://wiki.flightgear.org/Fgms">wiki</a> <a target="_blank"
+      href="https://gitorious.org/fgms/fgms-0-x">source</a>) server. Using the UDP crossfeed port
+      of fgms, 'crossfeed' gets a copy of every packet handled by the running fgms, and stores the
+      active flights in an internal vector.
+  </p>
+
+  <p>
+   There are a few ways to access that list of active flights, here using a HTTP port, which
+   returns a <a target="_blank"
+      href="http://json.org/">JSON</a> string. This list of active flight is updated by crossfeed
+      each second.
+  </p>
+
+  <p>
+   Using mpserver14.flightgear.org, running in <a target="_blank"
+      href="http://www.fgx.ch">fgx.ch</a> we have provided the json string on <a target="_blank"
+      href="http://crossfeed.fgx.ch/data">crossfeed.fgx.ch/data</a>. Here are some examples of
+      what can be done with that string.
+  </p>
+
+  <h2>
+   Simple List
+  </h2>
+
+  <p>
+   <a href="list.html">list.html</a>: This gets the json string, parses it and places the active
+   flight list in a simple table updated approximately each two seconds.
+  </p>
+
+  <p>
+   This list shows all the fields currently given in the json string - Flight ID, Callsign,
+   Longitude, Latitude, Heading, Altitude (feet AMSL), Speed (KAS), Distance (Nm) and Model. The
+   last column, Start, shows how the flight ID, which is actually epoch ms (nearly!) at start up,
+   can be converted to a date string. As can be seen the list is more or less ordered according to
+   the flight id.
+  </p>
+
+  <h2>
+   Simple Map
+  </h2>
+
+  <p>
+   <a href="map.html">map.html</a>: Here the json string is used to display the active multiserver
+   flights on an OSM map, giving a view of all the current multiplayer flights. Zoom out to see a
+   world view. Double click to zoom in to see a close up view.
+  </p>
+
+  <p>
+   Selecting any flight in the list and the map will zoom to that location. On multiple selections
+   the map will be zoomed to show all the selected flights. Clicking a selection a second time
+   will de-select it. Flights where the speed is less than 10 knots will be grayed.
+  </p>
+
+  <p>
+   Clicking on the bottom right 'permalink' will reload the map with a URL setting the location
+   and zoom. This can be stored in your 'favorites' to return to the same view. As the mouse
+   travels over the map, it's location in WGS-84 co-ordinates will be shown in the bottom right.
+  </p>
+
+  <h2>
+   Airport Map
+  </h2>
+
+  <p>
+   <a href="airports.html">airports.html</a>: This adds airports to the active flight map using a
+   WMS Layer provided by tilecache.fgx.ch. Obviously many other layers could be added.
+  </p>
+
+  <h2>
+   Caveate
+  </h2>
+
+  <p>
+   These 'samples' are probably best viewed in Google <a target="_blank"
+      href="https://www.google.com/intl/en/chrome/browser/">Chrome</a>, or <a target="_blank"
+      href="http://www.mozilla.org/en-US/firefox/new-b/">Firefox</a>. While some effort has been
+      made to support all browsers, most versions, some may not function fully correctly. Most
+      notably this includes Internet Explorer. These examples use <a target="_blank"
+      href="http://jquery.com/download/">jquery</a>, <a target="_blank"
+      href="http://www.openlayers.org/">OpenLayers</a>, and <a target="_blank"
+      href="http://www.w3schools.com/xml/xml_http.asp">XMLHttpRequest</a> to achieve their magic,
+      and while each of these generally state they support a wide range of browser and versions,
+      some simple testing show this to not always true.
+  </p>
+
+  <p>
+   If you have knowledge in this area, then we at <a target="_blank"
+      href="http://www.fgx.ch">fgx.ch</a> would really appreciate your help to make these example
+      work just about everywhere.
+  </p>
+
+  <h2>
+   Geodesy
+  </h2>
+
+  <p>
+   <a href="geodesic.htm">geodesic.htm</a>: This 'test' page is NOT really related to the above,
+   but includes some geodesic calculation which would allow 'rough' +/-0.3% calculation of the
+   distance travelled by an aircraft, or the distance between two aircraft.
+  </p>
+
+  <p>
+   Or indeed, given the current position of an aircraft, its heading, and speed, thus distance
+   over time, 'predict' the 'track' of an aircraft after 5, 10 minutes, etc. All interesting
+   things that could be drawn on the map.
+  </p>
+
+  <p>
+   <a href="ol_map.html">ol_map.html</a>: And this is a simple example of drawing, and removing
+   such a line feature, a 'track', on a map.
+  </p>
+
+  <p align="right">
+   index.html 20130122
+  </p>
+
+  <p>
+   <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401"
+        alt="Valid HTML 4.01 Transitional"
+        height="31"
+        width="88"></a>
+        <a href="http://tidy.sourceforge.net"><img src="images/checked_by_tidy.gif"
+        border="0"
+        alt="Checked by Tidy!"
+        height="32"
+        width="32"></a>
+  </p>
+ </body>
+</html>

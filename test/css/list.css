@@ -1,0 +1,209 @@
+/* 20130118 - style sheet for list example */
+
+/* font descriptions */
+
+@font-face {
+    font-family: 'DejaVuSansMonoBook';
+    src: url('fonts/DejaVuSansMono-webfont.eot');
+    src: url('fonts/DejaVuSansMono-webfont.eot?#iefix') format('embedded-opentype'),
+      url('fonts/DejaVuSansMono-webfont.woff') format('woff'),
+      url('fonts/DejaVuSansMono-webfont.ttf') format('truetype'),
+      url('fonts/DejaVuSansMono-webfont.svg#DejaVuSansMonoBook') format('svg');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'DejaVuSansMonoOblique';
+    src: url('fonts/DejaVuSansMono-Oblique-webfont.eot');
+    src: url('fonts/DejaVuSansMono-Oblique-webfont.eot?#iefix') format('embedded-opentype'),
+      url('fonts/DejaVuSansMono-Oblique-webfont.woff') format('woff'),
+      url('fonts/DejaVuSansMono-Oblique-webfont.ttf') format('truetype'),
+      url('fonts/DejaVuSansMono-Oblique-webfont.svg#DejaVuSansMonoOblique') format('svg');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'DejaVuSansMonoBold';
+    src: url('fonts/DejaVuSansMono-Bold-webfont.eot');
+    src: url('fonts/DejaVuSansMono-Bold-webfont.eot?#iefix') format('embedded-opentype'),
+      url('fonts/DejaVuSansMono-Bold-webfont.woff') format('woff'),
+       url('fonts/DejaVuSansMono-Bold-webfont.ttf') format('truetype'),
+       url('fonts/DejaVuSansMono-Bold-webfont.svg#DejaVuSansMonoBold') format('svg');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'DejaVuSansMonoBoldOblique';
+    src: url('fonts/DejaVuSansMono-BoldOblique-webfont.eot');
+    src: url('fonts/DejaVuSansMono-BoldOblique-webfont.eot?#iefix') format('embedded-opentype'),
+       url('fonts/DejaVuSansMono-BoldOblique-webfont.woff') format('woff'),
+       url('fonts/DejaVuSansMono-BoldOblique-webfont.ttf') format('truetype'),
+       url('fonts/DejaVuSansMono-BoldOblique-webfont.svg#DejaVuSansMonoBoldOblique') format('svg');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+/* style sheet */
+
+html, body {
+   margin: 10px;
+   width: 100%;
+   height: 100%;
+}
+
+#wrapper{
+    left: 5em;
+    border: 0px solid #000000;
+    height: 100%;
+    width: 100%;
+}
+
+#header_flights {
+   color: #ffffff;
+   background: #999999 ;/*url('../images/background_trans.png');*/
+   width: 870px;
+   line-height: 0px;
+}
+
+#header_flights td {
+  font-family: "DejaVuSansMonoBook", monospace;
+  font-size: 10px;
+  padding-right: 6px;
+  padding-left: 14px;
+  color: #ffffff;
+}
+     
+#content_flights {
+   background: url('../images/background_trans.png');
+   padding-left: 15px;
+   padding-top: 5px;
+   padding-right: 5px;
+   overflow-y: auto; 
+   overflow-x: auto;
+   width: 850px;
+}
+      
+#flights {
+   border-bottom: 1px solid #CCC;
+   padding: 0;
+   border: 0;
+ }
+      
+#flights td {
+  font-family: "DejaVuSansMonoBook", monospace;
+  font-size: 12px;
+  padding-right: 10px;
+  line-height: 0px;
+}
+
+#boxed {
+    border: 2px solid #CCC;
+    width: 100%
+}  
+
+/* header widths */
+.hfid,.hcallsign,.hlon,.hlat,.hhdg,.halt_ft,.hspd_kts,.hdist_nm,.hmodel,.hstart {
+   width: 80px;
+}
+.hfid {
+    width: 100px;
+}
+.hlon,.hlat,.hhdg,.halt_ft,.hspd_kts,.hdist_nm {
+    text-align: right;
+}
+.hhdg,.halt_ft,.hspd_kts,.hdist_nm {
+    width: 40px;
+}
+.hmodel {
+    width: 140px;
+}
+.hstart {
+    width: 200px;
+}
+      
+/* body widths */
+.fid,.callsign,.lon,.lat,.hdg,.alt_ft,.spd_kts,.dist_nm,.model,.start {
+   width: 80px;
+   border-top: 1px solid #CCCCCC;
+}
+.fid {
+    width: 100px;
+}
+.callsign p {
+  font-family: "DejaVuSansMonoBold", monospace;
+  font-size: 12px;
+  border: 0px solid #ffffff;
+  color: #000000;
+  padding: 2px;
+}
+.hdg,.alt_ft,.spd_kts,.dist_nm {
+    width: 40px;
+}
+
+.lon,.lat,.hdg,.alt_ft,.spd_kts,.dist_nm {
+    text-align: right;
+}
+
+.model {
+    width: 140px;
+}
+
+.start {
+    width: 200px;
+}
+      
+.red {
+color: #ff0000;
+ }
+.gray666 {
+color: #666666;
+ }
+.grayCCC {
+color: #CCCCCC;
+ }
+.back_grayCCC {
+background: #CCCCCC;
+ }
+.back_yellowFF0 {
+background: #FFFF00;
+ }
+.back_greenB7F {
+background: #b7f846;
+ }
+
+ /* add orientation images */
+ 
+ .hdg_n {
+background: url('../images/plane_black_10x10n.png') no-repeat left center;
+ }
+.hdg_ne {
+background: url('../images/plane_black_10x10ne.png') no-repeat left center;
+ }
+.hdg_e {
+background: url('../images/plane_black_10x10e.png') no-repeat left center;
+ }
+.hdg_se {
+background: url('../images/plane_black_10x10se.png') no-repeat left center;
+ }
+.hdg_s {
+background: url('../images/plane_black_10x10s.png') no-repeat left center;
+ }
+.hdg_sw {
+background: url('../images/plane_black_10x10sw.png') no-repeat left center;
+ }
+.hdg_w {
+background: url('../images/plane_black_10x10w.png') no-repeat left center;
+ }
+.hdg_nw {
+background: url('../images/plane_black_10x10nw.png') no-repeat left center;
+ }
+
+
+/* eof */
