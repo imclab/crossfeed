@@ -37,6 +37,7 @@
 #include <sys/stat.h> // unix struct stat
 #include "daemon.hxx"
 #include "logstream.hxx"
+#define stricmp strcasecmp
 #endif // _MSC_VER y/n
 
 #include <stdlib.h>

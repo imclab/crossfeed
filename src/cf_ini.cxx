@@ -41,6 +41,10 @@
 #include "cf_misc.hxx"
 #include "cf_ini.hxx"
 
+#ifndef WIN32
+#define stricmp strcasecmp
+#endif
+
 /* --------------------------------------
    <example.ini>
 ##########################################################################
@@ -129,7 +133,7 @@ int readINI( char *file )
     int iret = 0;
     std::string s;
     int i;
-    bool b;
+    //bool b;
     INI<> ini(file,false);
     if (!ini.Parse())
         return 1;   // FAILED to load INI file
@@ -229,8 +233,8 @@ int readINI( char *file )
 
     if (ini.Select("miscellaneous")) {
         // # --air          (-a) = Set to modify AIRCRAFT. (def=Off)
-        b = ini.Get<std::string,bool>("mod_aircraft",m_Modify_AIRCRAFT);
-        m_Modify_AIRCRAFT = b; // mod_aircraft=off
+        i = ini.Get<std::string,int>("mod_aircraft",(int)m_Modify_AIRCRAFT);
+        m_Modify_AIRCRAFT = i ? true : false; // b; // mod_aircraft=off
         // # --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=10)
         i = ini.Get<std::string,int>("live_secs", (int)m_PlayerExpires);
         m_PlayerExpires = i; // live_secs=10

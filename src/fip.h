@@ -217,7 +217,7 @@ template<class T, class U, class V>
 
       Nake(line);
 
-      if (line[0] != NULL)
+      if (line[0] != 0)
       {
           if (!((strlen(line) >= 2) && ((line[0] == '#')||(line[0] == ';')||(line[0] == '/' && line[1] == '/'))))  //Ignore comment
          {
