@@ -1,3 +1,29 @@
+2013/01/24 16:54:38
+
+    * Implement new feature to read a configuration INI 
+      file with command -c file.ini. Added new files -
+      cf_ini.cxx/hxx. INI parsing is using FIP (feather-ini-parsing)
+      from : https://code.google.com/p/feather-ini-parser/
+      Code license GNU GPL v2, here included as fip.h
+    * Added an example.ini to show the sections and key values
+      available. In the main, it matches all that can be done 
+      on the command line.
+    * A number of other minor changes to fully accomodate the 
+      use of this INI file - cf_client.cxx/hxx, cf_discards.cxx,
+      cf_misc.cxx, sprtf.cxx/hxx
+    * Prior to scanning the command line, seek and load 
+      a $HOME/.crossfeedrc INI file to set defaults and 
+      be able to run without any command line.
+    * Updated README.txt to reflect current version.
+    * Bumped AGE to 25.
+
+2013/01/22 00:00:00
+
+    * Main README.txt update
+    * Correct name of db_setup README.sql to txt
+    * Add some 'test' pages for crossfeed, etc
+    * Bring crossfeed uptodate with fgx-cf
+    
 2013/01/05 14:27:55
 
     * Due to a ' character in the callsign broke the sql statement,

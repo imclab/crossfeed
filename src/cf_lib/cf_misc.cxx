@@ -129,6 +129,7 @@ char *get_address_stg( sockaddr_in *pAddr, int size )
     return paddr;
 }
 
+// get short name - that is remove any path
 char *get_base_name(char *name)
 {
     char *bn = strdup(name);

@@ -60,6 +60,7 @@
 #include "cf_sqlite3.hxx"
 #endif
 #endif // USE_POSTGRESQL_DATABASE y/n
+#include "cf_ini.hxx"
 
 using namespace std;
 
@@ -191,18 +192,18 @@ int iStatDelay = 5*60; // each 5 mins
 int iByteCnt = 0;
 static int max_FailedCnt = 10;
 
-static const char *raw_log = 0; // "cf_raw.log";
+static const char *raw_log = "cf_raw.log";
 static FILE *raw_fp = 0;
 static bool raw_log_disabled = true;
 
-static const char *tracker_log = 0; // "cf_tracker.log";
+static const char *tracker_log = "cf_tracker.log";
 static FILE *tracker_fp = 0;
 static bool tracker_log_disabled = true;
 bool is_tracker_log_disabled() { return tracker_log_disabled; }
 
-const char *json_file = 0; // "flights.json";
+const char *json_file = "flights.json";
 const char *json_exp_file = "expired.json";
-static bool json_file_disabled = true;
+bool json_file_disabled = true;
 bool is_json_file_disabled() { return json_file_disabled; }
 
 static netSocket *m_TelnetSocket = 0;
@@ -220,6 +221,25 @@ static int m_ListenPort = SERVER_PORT;
 static string m_ListenAddress = "";
 
 static char packet[MX_PACKET_SIZE+8];
+
+std::string get_crossfeed_address() { return m_ListenAddress; }
+void set_crossfeed_address( std::string addr ) { m_ListenAddress = addr; }
+int get_crossfeed_port() { return m_ListenPort; }
+void set_crossfeed_port( int port ) { m_ListenPort = port; }
+std::string get_server_address() { return m_HTTPAddress; }
+void set_server_address( std::string addr ) { m_HTTPAddress = addr; m_TelnetAddress = addr; }
+int get_telnet_port() { return m_TelnetPort; }
+void set_telnet_port( int port ) { m_TelnetPort = port; }
+int get_http_port() { return m_HTTPPort; }
+void set_http_port( int port ) { m_HTTPPort = port; }
+
+const char *get_raw_log() { return raw_log; }
+void set_raw_log( const char *log ) { raw_log = strdup(log); } // "cf_raw.log";
+void set_raw_log_disable( bool set ) { raw_log_disabled = set; }
+
+const char *get_tracker_log() { return tracker_log; }
+void set_tracker_log( const char *log ) { tracker_log = strdup(log); } // "cf_tracker.log";
+void set_tracker_log_disable( bool set ) { tracker_log_disabled = set; }
 
 void print_version( char *pname )
 {
@@ -249,7 +269,7 @@ void give_help( char *pname )
     printf(" --json file    (-j) = Set the output file for JSON. (def=none)\n" );
     printf(" --raw file     (-r) = Set the packet output file. (def=none)\n" );
     printf(" --tracker file (-t) = Set the tracker output file. (def=none)\n" );
-    printf("A file output can be disable by using 'none' as the file name.\n");
+    printf("A file output can be disabled by using 'none' as the file name.\n");
     if (getcwd(tb,264)) {
         printf("Relative file names will use the cwd [%s]\n",tb);
 #ifndef _MSC_VER
@@ -275,7 +295,7 @@ void give_help( char *pname )
     printf(" --help     (-h, -?) = This HELP and exit 0\n");
     //printf(" --call         (-c) = Set to modify CALLSIGN. (def=%s)\n",
     //    (m_Modify_CALLSIGN ? "On" : "Off"));
-    printf(" --air          (-a) = Set to modify AIRCRAFT. (def=%s)\n",
+    printf(" --air          (-a) = Set to modify AIRCRAFT string. (def=%s)\n",
         (m_Modify_AIRCRAFT ? "On" : "Off"));
    printf(" --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=%d)\n",
         (int)m_PlayerExpires );
@@ -283,6 +303,10 @@ void give_help( char *pname )
     printf(" --daemon       (-d) = Run as daemon. (def=%s)\n", (RunAsDaemon ? "on" : "off"));
 #endif // !_MSC_VER
     printf(" -v[n]               = Bump or set verbosity - 0,1,2,5,9 (def=%d)\n", verbosity );
+    printf(" --conf file    (-c) = Load configuration from an INI type file.\n");
+    printf("See 'example.ini' in the source for valid sections and keys.\n");
+    printf("Prior to the command line a $HOME/" CF_RC_FILE " INI file will be loaded,\n");
+    printf("if it exists. In Windows, that will be %%USERPROFILE%%\\" CF_RC_FILE "\n");
     
     printf("\n");
     
@@ -332,7 +356,10 @@ int parse_commands( int argc, char **argv )
     char *sarg;
 
     scan_for_help( argc, argv ); // will NOT return if found
-
+    if (loadRCFile()) {
+        SPRTF("%s: ERROR: The " CF_RC_FILE " file NOT valid. Fix, rename or delete! Aborting...\n", mod_name );
+        exit(1);
+    }
     for ( i = 1; i < argc; i++ ) {
         i2 = i + 1;
         arg = argv[i];
@@ -343,6 +370,20 @@ int parse_commands( int argc, char **argv )
             while (*sarg == '-') sarg++;
             switch (*sarg) 
             {
+            case 'c':   // read configuration from an INI file
+                if (i2 < argc) {
+                    sarg = argv[i2];
+                    if (readINI(sarg)) {
+                        SPRTF("ERROR: Confguration INI file %s FAILED!\n",sarg);
+                        goto Bad_ARG;
+                    }
+                    i++;
+                } else {
+                    SPRTF("ERROR: Confguration INI file must follow!\n");
+                    goto Bad_ARG;
+                }
+                if (VERB1) SPRTF("%s: Read INI file [%s]\n", mod_name, sarg );
+                break;
             case 'A':
                 if (i2 < argc) {
                     sarg = argv[i2];
@@ -358,7 +399,10 @@ int parse_commands( int argc, char **argv )
             case 'I':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    m_ListenAddress = sarg;
+                    if (stricmp(sarg,"ANY"))
+                        m_ListenAddress = sarg;
+                    else
+                        m_ListenAddress = "";
                     i++;
                 } else {
                     SPRTF("ERROR: fgms IP address must follow!\n");
@@ -435,7 +479,10 @@ int parse_commands( int argc, char **argv )
             case 'l':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    set_log_file(sarg);
+                    if (strcmp(sarg,"none"))
+                        set_log_file(sarg);
+                    else
+
                     i++;
                 } else {
                     SPRTF("ERROR: log file value must follow!\n");
@@ -614,7 +661,7 @@ int parse_commands( int argc, char **argv )
             //    break;
             case 'a':
                 m_Modify_AIRCRAFT = true;
-                if (VERB1) printf("%s: Set to modify AIRCRAFT %s.\n", mod_name,
+                if (VERB1) printf("%s: Set to modify AIRCRAFT string %s.\n", mod_name,
                     (m_Modify_AIRCRAFT ? "On" : "Off"));
                 break;
             default:
@@ -1552,75 +1599,6 @@ void Close_Listen()
 }
 
 ////////////////////////////////////////////////////////////////
-#ifdef _OLD_INFO_JSON
-
-static char _s_big_buf[1024];
-const char *j_head = "{\"success\":true,\n\"source\":\"%s\",\n\"started\":\"%s\",\n\"info\":[{\n";
-const char *info_json = 0;
-std::string get_info_json() 
-{
-    std::string s;
-    if (!info_json)
-        return s;
-    s = info_json;
-    s += ",\n\t\"current_time\":\"";
-    s += Get_Current_UTC_Time_Stg();
-    s += " UTC\"";
-    char *cp = _s_big_buf;
-    s += ",\n\t\"secs_in_http\":\"";
-    sprintf(cp,"%.1f",m_dSecs_in_HTTP);
-    s += cp;
-    s += "\"";
-    if (m_dBegin_Secs > 0.0) {
-        double t2 = get_seconds();
-        s += ",\n\t\"secs_running\":\"";
-        sprintf(cp,"%.1f",t2 - m_dBegin_Secs);
-        s += cp;
-        s += "\"";
-    }
-    // what else to ADD - maybe stats
-#if defined(USE_POSTGRESQL_DATABASE) // TODO || defined(USE_SQLITE3_DATABASE))
-    if (Enable_SQL_Tracker) {
-        add_thread_stats_json(s);
-    }
-#endif
-    s += "\n}]}\n";
-    return s;
-}
-
-void set_init_json()
-{
-    char *cp = _s_big_buf;
-    char *tp = Get_Current_UTC_Time_Stg();
-    sprintf(cp, j_head, mod_name, tp);
-    sprintf(EndBuf(cp),"\t\"TTL_secs\":\"%ld\",\n", m_PlayerExpires);
-    sprintf(EndBuf(cp),"\t\"min_dist_m\":\"%d\",\n", (int)m_MinDistance_m);
-    sprintf(EndBuf(cp),"\t\"min_speed_kt\":\"%d\",\n", m_MinSpdChange_kt);
-    sprintf(EndBuf(cp),"\t\"min_hdg_chg_deg\":\"%d\",\n", m_MinHdgChange_deg);
-    sprintf(EndBuf(cp),"\t\"min_alt_chg_ft\":\"%d\"\n", m_MinAltChange_ft);
-    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"\n", 
-        (tracker_log ? tracker_log : "none"));
-#ifdef USE_POSTGRESQL_DATABASE
-    if (Enable_SQL_Tracker)
-        sprintf(EndBuf(cp),"\t\"tracker_db\":\"%s\"\n", get_pg_db_name());
-    else
-        sprintf(EndBuf(cp),"\t\"tracker_db\":\"DISABLED\"\n");
-#else // #ifdef USE_POSTGRESQL_DATABASE
-#ifdef USE_SQLITE3_DATABASE // ie !#ifdef USE_POSTGRESQL_DATABASE
-    if (Enable_SQL_Tracker)
-        sprintf(EndBuf(cp),"\t\"tracker_db\":\"%s\"\n", get_sqlite3_db_name());
-    else
-        sprintf(EndBuf(cp),"\t\"tracker_db\":\"DISABLED\"\n");
-#endif // USE_SQLITE3_DATABASE // ie !#ifdef USE_POSTGRESQL_DATABASE
-#endif // #ifdef USE_POSTGRESQL_DATABASE y/n
-    // strcat(cp,"}]}\n");
-    int len = (int)strlen(cp);
-    cp[len-1] = ' ';    // convert last line end to space
-    info_json = strdup(cp); // store this fixed header string
-    SPRTF(get_info_json().c_str());
-}
-
-#else // #ifdef _OLD_INFO_JSON
 ////////////////////////////////////////////////////////////////
 static char _s_big_buf[1024];
 const char *j_head = "{\"success\":true,\n\"source\":\"%s\",\n\"started\":\"%s\",\n\"info\":[{\n";
@@ -1706,7 +1684,7 @@ void set_init_json()
     sprintf(EndBuf(cp),"\t\"min_speed_kt\":%d,\n", m_MinSpdChange_kt);
     sprintf(EndBuf(cp),"\t\"min_hdg_chg_deg\":%d,\n", m_MinHdgChange_deg);
     sprintf(EndBuf(cp),"\t\"min_alt_chg_ft\":%d,\n", m_MinAltChange_ft);
-    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log ? tracker_log : "none"));
+    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log_disabled ? "none" : tracker_log ));
     //sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = true;
     sprintf(EndBuf(cp),",\n\t\"modify_aircraft\":%s", (m_Modify_AIRCRAFT ? "true" : "false"));  // def = false;
     sprintf(EndBuf(cp),",\n\t\"listen_addr\":\"%s\"", (m_ListenAddress.size() ? m_ListenAddress.c_str() : "IPADDR_ANY"));
@@ -1740,26 +1718,29 @@ void set_init_json()
     SPRTF(get_info_json().c_str());
 }
 //////////////////////////////////////////////////////////////////////
-#endif //#ifdef !_OLD_INFO_JSON
 
 
 //////////////////////////////////////////////////////////////////////
-
+// main() - entry from OS
+//
+// Parse command line, including any .cfrc or other INI file(s)
+// and do ALL setup, before calling the forever loop - Do_RecvFrom();
+/////////////////////////////////////////////////////////////////////
 int cf_client_main(int argc, char **argv)
 {
     int iret = 0;
 
-    parse_commands(argc,argv);
+    parse_commands(argc,argv);  // will NOT return if ERROR
 
     if (VERB1) SPRTF("Running %s, version %s\n", argv[0], VERSION);
 
     if ( netInit() ) {
-        return 1;
+        return 1; // HUH! Windows load ws2_32.lib failed!!
     }
     
     if (Create_Listen_Port()) {
         Close_Listen();
-        return 1;
+        return 1; // Main purpose - setup to read UDP port - FAILED - abort
     }
 
     if (VERB1) SPRTF("%s: Receive packets from [%s], on port %d\n", mod_name, 
@@ -1768,18 +1749,18 @@ int cf_client_main(int argc, char **argv)
 
     if ( !tracker_log_disabled && tracker_log ) {
         if ( Create_Tracker_Log() )
-            return 1;
+            return 1; // if enabled, and failed, abort
     }
 
     if ( !raw_log_disabled && raw_log ) {
         if ( Create_Raw_Log() )
-            return 1;
+            return 1; // if enabled, and failed, abort
     }
 
     if (m_TelnetPort && (m_TelnetPort > 0)) {
         if (Create_Telnet_Port()) {
             Close_Listen();
-            return 1;
+            return 1; // if enabled, and failed, abort
         }
         if (VERB1) SPRTF("%s: Established telnet on [%s], on port %d\n", mod_name, 
             (m_TelnetAddress.size() ? m_TelnetAddress.c_str() : "IPADDR_ANY"), 
@@ -1790,7 +1771,7 @@ int cf_client_main(int argc, char **argv)
         if (Create_HTTP_Port()) {
             Close_Telnet();
             Close_Listen();
-            return 1;
+            return 1; // if enabled, and failed, abort
         }
         if (VERB1) SPRTF("%s: Established HTTP on [%s], on port %d\n", mod_name, 
             (m_HTTPAddress.size() ? m_HTTPAddress.c_str() : "IPADDR_ANY"), 
@@ -1811,14 +1792,14 @@ int cf_client_main(int argc, char **argv)
     if (Enable_SQL_Tracker) {
         if (start_tracker_thread()) {
             SPRTF("ERROR: Failed to create tracker thread! Aborting...\n");
-            return 1;
+            return 1; // if enabled, and failed, abort
         }
     }
 #endif // #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
 
-    set_init_json();
+    set_init_json(); // setup initial 'info' json string
 
-    Do_RecvFrom();
+    Do_RecvFrom(); // enter FOREVER loop
 
     Close_Telnet();
     Close_HTTP();
@@ -1828,7 +1809,8 @@ int cf_client_main(int argc, char **argv)
     if (Enable_SQL_Tracker)
         thread_stop(false);
 #endif // #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
-    return iret;
+
+    return iret; // return to OS
 }
 
 ///////////////////////////////////////////////////////////////////

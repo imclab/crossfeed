@@ -163,14 +163,18 @@ char * get_log_file( void )
    return logfile;
 }
 
-void   set_log_file( char * nf )
+void   set_log_file( char * nf, bool open )
 {
    if (logfile[0] == 0)
       strcpy(logfile,def_log);
    if ( nf && *nf && strcmpi(nf,logfile) ) {
       close_log_file(); // remove any previous
       strcpy(logfile,nf); // set new name
-      open_log_file();  // and open it ... anything previous written is 'lost'
+      if (strcmp(logfile,"none")) {
+          outfile = (FILE *)-1; // disable the log file
+      } else if (open) {
+          open_log_file();  // and open it ... anything previous written is 'lost'
+      }
    }
 }
 

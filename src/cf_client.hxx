@@ -47,6 +47,7 @@ extern bool is_tracker_log_disabled();  // { return tracker_log_disabled; }
 extern const char *json_file; // = "flights.json";
 extern const char *json_exp_file; // = "expired.json";
 extern bool is_json_file_disabled(); // { return json_file_disabled; }
+extern bool json_file_disabled;
 extern std::string get_info_json();  // return the info string
 
 extern int verbosity;
@@ -57,6 +58,26 @@ extern bool Enable_SQL_Tracker;
 #define VERB2 (verbosity >= 2)
 #define VERB5 (verbosity >= 5)
 #define VERB9 (verbosity >= 9)
+
+extern std::string get_crossfeed_address(); // { return m_ListenAddress; }
+extern void set_crossfeed_address( std::string addr ); // { m_ListenAddress = addr; }
+extern int get_crossfeed_port(); // { return m_ListenPort; }
+extern void set_crossfeed_port( int port ); // { m_ListenPort = port; }
+
+extern std::string get_server_address(); // { return m_HTTPAddress; }
+extern void set_server_address( std::string addr ); // { m_HTTPAddress = addr; m_TelnetAddress = addr; }
+extern int get_telnet_port(); // { return m_TelnetPort; }
+extern void set_telnet_port( int port ); // { m_TelnetPort = port; }
+extern int get_http_port(); // { return m_HTTPPort; }
+extern void set_http_port( int port ); // { m_HTTPPort = port; }
+
+extern const char *get_raw_log(); // { return raw_log; }
+extern void set_raw_log( const char *log ); // { raw_log = strdup(log); } // "cf_raw.log";
+extern void set_raw_log_disable( bool set ); // { raw_log_disabled = set; }
+
+extern const char *get_tracker_log(); // { return tracker_log; }
+extern void set_tracker_log( const char *log ); // { tracker_log = strdup(log); } // "cf_tracker.log";
+extern void set_tracker_log_disable( bool set ); // { tracker_log_disabled = set; }
 
 #endif // _CF_SERVER_HXX_
 // eof - cf_server.hxx

@@ -1,4 +1,5 @@
 #
+# 20130124 - back to crossfeed on gitorious, to add new INI feature
 # 20130101 - back to fgx-cf on fgx.ch, and ONLY install the primary app, cf_client
 # 20121229 - fork to 'crossfeed', and set USE_SIMGEAR_LIB on by default.
 # 20121213 - commence to work with postgresql, ON by default - build test_pg app
@@ -32,7 +33,7 @@ set (SERV_EXE cf_server)
 # The version number.
 set (cf_MAJOR 1)
 set (cf_MINOR 0)
-set (cf_AGE   24)
+set (cf_AGE   25)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
     message(FATAL_ERROR "*** ERROR: Only ONE of USE_POSTGRESQL_DATABASE or USE_SQLITE3_DATABASE can be enabled, NOT BOTH!")
@@ -258,8 +259,8 @@ endif()
 #####################################
 ### build the primary application ###
 #####################################
-set(CHDRS src/cf_client.hxx src/cf_pilot.hxx src/cf_version.hxx)
-set(CSRCS src/cf_client.cxx src/cf_pilot.cxx)
+set(CHDRS src/cf_client.hxx src/cf_pilot.hxx src/cf_version.hxx src/cf_ini.hxx src/fip.h)
+set(CSRCS src/cf_client.cxx src/cf_pilot.cxx src/cf_ini.cxx)
 if (USE_SQLITE3_DATABASE)
     list(APPEND CHDRS src/cf_sqlite3.hxx)
     list(APPEND CSRCS src/cf_sqlite3.cxx)

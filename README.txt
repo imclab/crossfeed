@@ -1,7 +1,7 @@
 FlightGear MultiPlayer Server Cross Feed Client
 -----------------------------------------------
 
-File: README.txt - 20130123 - 20121024 - Started 20121017
+File: README.txt - 20130124 - 20130123 - 20121024 - Started 20121017
 
 A simple UPD client acting as a CROSSFEED for fgms. 
 
@@ -24,13 +24,12 @@ When running cf_client add this configuraion to the command line
  --IP addr     (-I) = Set IP address to connect to fgms. (def=IPADDR_ANY)
  --PORT val    (-P) = Set PORT address to connect to fgms. (dep=3333)
 
-> cf_client -I 192.168.1.21 -P 3333
+like> cf_client -I 192.168.1.21 -P 3333
 
 To see the full command line option run using -?, like -
-C:\FG\17\build-cf>Debug\cf_clientd.exe  -?
-
+C:\FG\17\build-cf>Release\cf_client.exe  -?
 ==========================================================================
-cf_clientd.exe - version 1.0.24, compiled Jan 23 2013, at 18:21:22
+cf_client.exe - version 1.0.25, compiled Jan 24 2013, at 19:06:23
 
 fgms connection:
  --IP addr      (-I) = Set IP address to connect to fgms. (def=IPADDR_ANY)
@@ -48,7 +47,7 @@ File Outputs:
  --json file    (-j) = Set the output file for JSON. (def=none)
  --raw file     (-r) = Set the packet output file. (def=none)
  --tracker file (-t) = Set the tracker output file. (def=none)
-A file output can be disable by using 'none' as the file name.
+A file output can be disabled by using 'none' as the file name.
 Relative file names will use the cwd [C:\FG\17\build-cf]
 
 Tracker: Using PostgreSQL
@@ -60,10 +59,15 @@ Tracker: Using PostgreSQL
 
 Miscellaneous:
  --help     (-h, -?) = This HELP and exit 0
- --air          (-a) = Set to modify AIRCRAFT. (def=Off)
+ --air          (-a) = Set to modify AIRCRAFT string. (def=Off)
  --LIVE secs    (-L) = Set the flight TTL in integer secs. (def=10)
  -v[n]               = Bump or set verbosity - 0,1,2,5,9 (def=1)
+ --conf file    (-c) = Load configuration from an INI type file.
+See 'example.ini' in the source for valid sections and keys.
+Prior to the command line a $HOME/.crossfeedrc INI file will be loaded,
+if it exists. In Windows, that will be %USERPROFILE%\.crossfeedrc
 ==========================================================================
+
 
 Ouput:
 ------
@@ -89,6 +93,7 @@ For unix:
 
 1: build-cf $ cmake [Options] /path/to/cf/source
 2: build-cf $ make
+3: build-cf $ [sudo] make install (if desired)
 
 For msvc:
 
@@ -103,7 +108,8 @@ diectory to thie new out-of-source build folder
 2: Click [Configure], and select the 'generator'
 3: Maybe adjust items and [Configure] again
 4: Click [Generate]
-5: Load cf_client.sln into MSVC, and build the project.
+5: Load cf_client.sln into MSVC, switch to Release configuration,
+   and build the project (F7).
 
 This process should create the cf_client binary.
 
@@ -125,6 +131,9 @@ src\cf_client.cxx  - main() - does all socket handling
 src\cf_client.hxx
 src\cf_pilot.cxx   - Deal with the packets from fgms crossfeed
 src\cf_pilot.hxx
+src\cf_ini.cxx     - Load configuration from an INI file
+src\cf_ini.hxx
+src\fip.h          - INI implemetation header
 
 src\cf_pg.cxx      - If tracker data to postgresql database enabled
 src\cf_pg.hxx
@@ -184,11 +193,11 @@ src\test\map.html      - JSON feed displayed on OSM map
 src\test\airports.html - Add an airport overlay to map
 src\test\geodesic.htm  - Some examples of geodesic calculations
 src\test\ol_map.html   - Simple example, drawing a track on a map.
-plus the src\test subdirectories and files
+plus the src\test subdirectories and files like -
 css, images, img, and js
 
 Enjoy.
 Geoff.
-20130123
+20130124
 
 # eof
