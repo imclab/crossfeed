@@ -284,7 +284,7 @@ void give_help( char *pname )
     printf(" --ip addr      (-i) = Set db ip address. (def=%s)\n", get_pg_db_ip() );
     printf(" --port num     (-p) = Set db port value. (def=%s)\n", get_pg_db_port() );
     printf(" --user name    (-u) = Set db user name. (def=%s)\n", get_pg_db_user() );
-    printf(" --word pwd     (-w) = Set db password. (def=%s)\n", get_pg_db_pwd() );
+    printf(" --word pwd     (-w) = Set db password.\n" );
 #else // !#ifdef USE_POSTGRESQL_DATABASE
 #ifdef USE_SQLITE3_DATABASE // ie !#ifdef USE_POSTGRESQL_DATABASE
     printf("\nTracker:\n");
@@ -357,6 +357,7 @@ int parse_commands( int argc, char **argv )
     char *sarg;
 
     scan_for_help( argc, argv ); // will NOT return if found
+
     if (loadRCFile()) {
         SPRTF("%s: ERROR: The " CF_RC_FILE " file NOT valid. Fix, rename or delete! Aborting...\n", mod_name );
         exit(1);
@@ -375,12 +376,12 @@ int parse_commands( int argc, char **argv )
                 if (i2 < argc) {
                     sarg = argv[i2];
                     if (readINI(sarg)) {
-                        SPRTF("ERROR: Confguration INI file %s FAILED!\n",sarg);
+                        SPRTF("%s: ERROR: Confguration INI file %s FAILED!\n",mod_name, sarg);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("ERROR: Confguration INI file must follow!\n");
+                    SPRTF("%s: ERROR: Confguration INI file must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 if (VERB1) SPRTF("%s: Read INI file [%s]\n", mod_name, sarg );
@@ -392,7 +393,7 @@ int parse_commands( int argc, char **argv )
                     m_TelnetAddress = sarg;
                     i++;
                 } else {
-                    SPRTF("ERROR: HTTP and Telnet IP address must follow!\n");
+                    SPRTF("%s: ERROR: HTTP and Telnet IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 if (VERB1) SPRTF("%s: Set HTTP and Telnet IP address to %s\n", mod_name, sarg );
@@ -406,7 +407,7 @@ int parse_commands( int argc, char **argv )
                         m_ListenAddress = "";
                     i++;
                 } else {
-                    SPRTF("ERROR: fgms IP address must follow!\n");
+                    SPRTF("%s: ERROR: fgms IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 if (VERB1) SPRTF("%s: Set listen address to %s\n", mod_name, sarg );
@@ -417,20 +418,25 @@ int parse_commands( int argc, char **argv )
                     if (is_digits(sarg))
                         m_ListenPort = atoi(sarg);
                     else {
-                        SPRTF("ERROR: PORT value must be digits only!\n");
+                        SPRTF("%s: ERROR: fgms server PORT value must be digits only!\n", mod_name);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("ERROR: fgms server PORT value must follow!\n");
+                    SPRTF("%s: ERROR: fgms server PORT value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set PORT to %d\n", mod_name, m_ListenPort );
+                if (VERB1) SPRTF("%s: Set fgms server PORT to %d\n", mod_name, m_ListenPort );
                 break;
             case 'T':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    m_TelnetPort = atoi(sarg);
+                    if (is_digits(sarg))
+                        m_TelnetPort = atoi(sarg);
+                    else {
+                        SPRTF("ERROR: PORT value must be digits only!\n");
+                        goto Bad_ARG;
+                    }
                     i++;
                 } else {
                     SPRTF("ERROR: telnet PORT value must follow!\n");
@@ -441,13 +447,18 @@ int parse_commands( int argc, char **argv )
             case 'H':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    m_HTTPPort = atoi(sarg);
+                    if (is_digits(sarg))
+                        m_HTTPPort = atoi(sarg);
+                    else {
+                        SPRTF("%s: ERROR: HTTP PORT value must be digits only!\n",mod_name);
+                        goto Bad_ARG;
+                    }
                     i++;
                 } else {
-                    SPRTF("ERROR: HTTP PORT value must follow!\n");
+                    SPRTF("%s: ERROR: HTTP PORT value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set HTTP PORT to %d\n", mod_name, m_TelnetPort );
+                if (VERB1) SPRTF("%s: Set HTTP PORT to %d\n", mod_name, m_HTTPPort );
                 break;
 #ifndef _MSC_VER
             // SPRTF(" --daemon       (-d) = Run as daemon. (def=%s)\n", (RunAsDaemon ? "on" : "off"));
@@ -480,16 +491,18 @@ int parse_commands( int argc, char **argv )
             case 'l':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    if (strcmp(sarg,"none"))
-                        set_log_file(sarg);
-                    else
-
+                    set_log_file(sarg); // this checks for 'none', to DISABLE log
                     i++;
                 } else {
                     SPRTF("ERROR: log file value must follow!\n");
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set log output to [%s]\n", mod_name, get_log_file());
+                if (VERB1) {
+                    if (strcmp(sarg,"none"))
+                        SPRTF("%s: Set log output to [%s]\n", mod_name, get_log_file());
+                    else
+                        SPRTF("%s: Set log output DISABLED.\n", mod_name);
+                }
                 break;
             case 'L':
                 if (i2 < argc) {
@@ -528,7 +541,7 @@ int parse_commands( int argc, char **argv )
                     if (raw_log_disabled)
                         SPRTF("%s: raw log file disabled.\n", mod_name);
                     else
-                        SPRTF("%s: Set raw log output to [%s]\n", mod_name, json_file);
+                        SPRTF("%s: Set raw log output to [%s]\n", mod_name, raw_log);
                 }
                 break;
 #ifdef USE_POSTGRESQL_DATABASE
@@ -536,9 +549,10 @@ int parse_commands( int argc, char **argv )
                 if (i2 < argc) {
                     sarg = argv[i2];
                     // if NOT 'none' set database name
-                    if (strcmp(sarg,"none"))
+                    if (strcmp(sarg,"none")) {
                         set_pg_db_name(sarg);
-                    else
+                        Enable_SQL_Tracker = true; // tracker database enabled
+                    } else
                         Enable_SQL_Tracker = false; // tracker database disabled
 
                     if (VERB1) {
@@ -558,8 +572,9 @@ int parse_commands( int argc, char **argv )
                     sarg = argv[i2];
                     set_pg_db_ip(sarg);
                     i++;
+                    if (VERB1) SPRTF("%s: Set PostgreSQL address to [%s]\n", mod_name, get_pg_db_ip());
                 } else {
-                    SPRTF("IP address must follow!\n");
+                    SPRTF("%s: ERROR: IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -568,28 +583,35 @@ int parse_commands( int argc, char **argv )
                     sarg = argv[i2];
                     set_pg_db_port(sarg);
                     i++;
+                    if (VERB1) SPRTF("%s: Set PostgreSQL port to [%s]\n", mod_name, get_pg_db_port());
                 } else {
-                    SPRTF("port value must follow!\n");
+                    SPRTF("%s: ERROR: port value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
             case 'u':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    set_pg_db_user(sarg);
                     i++;
+                    if (strcmp(sarg,get_pg_db_user())) {
+                        set_pg_db_user(sarg);
+                        if (VERB1) SPRTF("%s: Set PostgreSQL to new user.\n", mod_name);
+                    }
                 } else {
-                    SPRTF("user name must follow!\n");
+                    SPRTF("%s: ERROR: user name must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
             case 'w':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    set_pg_db_pwd(sarg);
+                    if (strcmp(sarg,get_pg_db_user())) {
+                        set_pg_db_pwd(sarg);
+                        if (VERB1) SPRTF("%s: Set PostgreSQL to new password.\n", mod_name);
+                    }
                     i++;
                 } else {
-                    SPRTF("password must follow!\n");
+                    SPRTF("%s: ERROR: password must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -599,9 +621,10 @@ int parse_commands( int argc, char **argv )
             case 's':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    if (strcmp(sarg,"none"))
+                    if (strcmp(sarg,"none")) {
                         set_sqlite3_db_name(sarg);
-                    else
+                        Enable_SQL_Tracker = true;
+                    } else
                         Enable_SQL_Tracker = false;
                     i++;
                 } else {
@@ -621,17 +644,18 @@ int parse_commands( int argc, char **argv )
             case 't':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    if (strcmp(sarg,"none"))
+                    if (strcmp(sarg,"none")) {
                         tracker_log = strdup(sarg);
-                    else
+                        tracker_log_disabled = false;
+                    } else
                         tracker_log_disabled = true;
                     i++;
                 } else {
-                    SPRTF("ERROR: tracker log file value must follow!\n");
+                    SPRTF("%s: ERROR: tracker log file value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 if (VERB1) {
-                    if (raw_log_disabled)
+                    if (tracker_log_disabled)
                         SPRTF("%s: tracker log file disabled.\n", mod_name);
                     else
                         SPRTF("%s: Set tracker log output to [%s]\n", mod_name, tracker_log);

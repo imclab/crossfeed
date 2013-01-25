@@ -824,8 +824,8 @@ int run_tests()
     std::string s1;
     char *cp = _s_big_buff;
     cf_postgres *ppg = &ldb;
-    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], pwd [%s]\n",
-    ip_address, port, database, user, pwd );
+    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], plus a pwd...\n",
+        ip_address, port, database, user );
 
     if (strcmp(ip_address,DEF_PG_IP))
         ppg->set_db_host(ip_address);

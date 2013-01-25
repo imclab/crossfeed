@@ -198,8 +198,8 @@ int m_iMax_Retries = 10;
 int db_init()
 {
     int rc = 0;
-    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], pwd [%s]\n",
-    ip_address, port, database, user, pwd );
+    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], plus a pwd...\n",
+        ip_address, port, database, user );
 
     cf_postgres *ppg = get_db_instance();
 

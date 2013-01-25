@@ -1043,8 +1043,8 @@ int main( int argc, char **argv )
     if (parse_commands(argc,argv))
         return 1;
 
-    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], pwd [%s]\n",
-        ip_address, port, database, user, pwd );
+    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], plus a pwd\n",
+        ip_address, port, database, user );
 
     rc = ConnectDB(&conn);
     if (rc)

@@ -1,3 +1,14 @@
+2013/01/25 14:05:13
+
+    * Remove pwd output from log file, and tidy up several 
+      log messages during command line parsing.
+    * For unix add #define stricmp strcasecmp
+    * Minor addjustment in fip.h. Change if (line[0] == NULL) to
+      if (line[0] == 0), to avoid gcc warning. There remains 
+      a few gcc compiler warnings using -Wall, but do not seem 
+      to effect running. Put a post on Google code, feather-ini-parser,
+      to maybe even remove these.
+      
 2013/01/24 16:54:38
 
     * Implement new feature to read a configuration INI 
