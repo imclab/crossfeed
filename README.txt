@@ -113,6 +113,25 @@ diectory to thie new out-of-source build folder
 
 This process should create the cf_client binary.
 
+List of CMake options: see CMakeLists.txt
+-----------------------------------------
+
+option USE_SIMGEAR_LIB Def=ON
+# WARNING: Compile fixes would be needed to turn this OFF
+
+option USE_POSTGRESQL_DATABASE Def=ON
+option USE_SQLITE3_DATABASE    Def=OFF
+# Tracker - at present only one or the other can be enabled
+
+option ADD_HTTP_TEST Def=ON
+# Only needed for test_http tool
+
+option USE_GEOGRAPHIC_LIB Def=OFF
+# Experimental - http://geographiclib.sourceforge.net/html/ 
+# to test replacing SG
+
+option BUILD_SERVER Def=OFF
+# Presently not used, and NO SUPPORT for this option!
 
 Source File List:
 -----------------
@@ -178,11 +197,22 @@ src\cf_lib\cf_sqlite.hxx
 Windows ONLY
 src\cf_lib\win_strptime.cxx
 
+Tools: src/tools - various testing tools
+cf_feed.cxx  - read raw log and crossfeed to cf_client
+test_http.cxx/hxx - just testing HTTP handling
+test_pg.cxx - test posgresql connection and adding/deleting records
+test_sqlite.cxx/hxx - test sqlite adding/enumerating/deleting records
+test_pg2.cxx - test postgresql, and using geographic library
+sqlLi2Pg.cxx/hxx - experimental transfer of records - not completed.
+
+
 Dependencies:
 -------------
 
-Simple   - SimGearCore.lib, plus the usual 'system' libraries.
-Tacker   - PostgreSQL or SQlite3, and pthread library.
+Simple    - SimGearCore.lib, plus the usual 'system' libraries.
++Tacker   - PostgreSQL or SQlite3, and pthread library.
++test_pg2 - Requires Geographic library.
+
 
 Test HTML Files:
 ----------------

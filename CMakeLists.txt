@@ -7,14 +7,21 @@
 #
 cmake_minimum_required (VERSION 2.6)
 
-project (cf_client)
+project (crossfeed)
 
-option( BUILD_SERVER            "Build the presently not used server module" OFF)
+# WARNING: Compile fixes would be needed to turn this OFF
 option (USE_SIMGEAR_LIB         "Set ON to link with SimGear"                 ON)
-option (USE_GEOGRAPHIC_LIB      "Set ON to link with Geographic libarary."    ON)
+# Tracker - at present only one or the other can be enabled
 option (USE_POSTGRESQL_DATABASE "Set ON to link with postgresql lib."         ON)
 option (USE_SQLITE3_DATABASE    "Set ON to link with sqlite3 library."       OFF)
+
+# Only needed for test_http tool
 option (ADD_HTTP_TEST           "Set ON to add netSockets to the cf_lib."     ON)
+# Experimental - http://geographiclib.sourceforge.net/html/ - test replacing SG
+option (USE_GEOGRAPHIC_LIB      "Set ON to link with Geographic libarary."    OFF)
+
+# Presently not used
+option( BUILD_SERVER            "Build the presently not used server module"  OFF)
 
 set (CLI_EXE cf_client)
 set (SERV_EXE cf_server)
@@ -33,7 +40,7 @@ set (SERV_EXE cf_server)
 # The version number.
 set (cf_MAJOR 1)
 set (cf_MINOR 0)
-set (cf_AGE   25)
+set (cf_AGE   26)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
     message(FATAL_ERROR "*** ERROR: Only ONE of USE_POSTGRESQL_DATABASE or USE_SQLITE3_DATABASE can be enabled, NOT BOTH!")
@@ -358,11 +365,11 @@ endif (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
 
 # CROSSFEED FEEDER APP, for testing
 set(cff_SRCS src/tools/cf_feed.cxx)
-add_executable(cf_feed ${cff_SRCS})
-target_link_libraries(cf_feed ${EXTRA_LIBS} )
+add_executable(test_feed ${cff_SRCS})
+target_link_libraries(test_feed ${EXTRA_LIBS} )
 if (WIN32)
-    set_target_properties(cf_feed PROPERTIES DEBUG_POSTFIX "d" )
+    set_target_properties(test_feed PROPERTIES DEBUG_POSTFIX "d" )
 endif (WIN32)
-# install( TARGETS cf_feed DESTINATION bin )
+# install( TARGETS test_feed DESTINATION bin )
 
 # eof

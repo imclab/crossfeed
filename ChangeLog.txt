@@ -1,3 +1,14 @@
+2013/01/27 11:37:43
+
+    * Change the cmake project name to 'crossfeed'. Seems this
+      does vrey little in unix, and only changes the MSVC solution 
+      file name in windows.
+    * Changed CMake option USE_GEOGRAPHIC_LIB to OFF by default, removing
+      dependency to Geographic library needed only for test_pg2
+    * Tested removing SimgearCore library dependence, but several code 
+      fixes required to build with this OFF.
+    * Bumped AGE to 26.
+
 2013/01/25 14:05:13
 
     * Remove pwd output from log file, and tidy up several 
