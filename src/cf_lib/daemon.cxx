@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include "logstream.hxx"
 #include "daemon.hxx"
+#include "cf_misc.hxx"
 
 using namespace std;
 
@@ -129,6 +130,9 @@ void cDaemon::SigHandler ( int SigType )
 			break;
 		default: SG_LOG2 (SG_SYSTEMS, SG_ALERT, "killed by signal " << SigType << "!");
 	}
+#ifdef _CF_MISC_HXX_
+    SG_LOG2 (SG_SYSTEMS, SG_ALERT, "App exit at " << Get_Current_UTC_Time_Stg() << " UTC");
+#endif
 	exit (0);
 }
 
