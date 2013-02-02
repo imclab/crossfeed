@@ -76,9 +76,9 @@ char *get_errmsg_text( int err )
 
 int nanosleep( struct timespec *req, struct timespec *rem )
 {
-    DWORD ms = req->tv_nsec / 1000000;
+    DWORD ms = req->tv_nsec / 1000000; // nanoseconds to milliseconds
     if (req->tv_sec)
-        ms += (DWORD)(req->tv_sec * 1000000000);
+        ms += (DWORD)(req->tv_sec * 1000); // seconds to milliseconds
     if (ms == 0)
         ms = 1;
     Sleep(ms);
