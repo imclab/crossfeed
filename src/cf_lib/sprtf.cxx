@@ -170,11 +170,12 @@ void   set_log_file( char * nf, bool open )
    if ( nf && *nf && strcmpi(nf,logfile) ) {
       close_log_file(); // remove any previous
       strcpy(logfile,nf); // set new name
-      if (strcmp(logfile,"none")) {
+      if (strcmp(logfile,"none") == 0) { // if equal 'none'
           outfile = (FILE *)-1; // disable the log file
       } else if (open) {
           open_log_file();  // and open it ... anything previous written is 'lost'
-      }
+      } else
+          outfile = 0; // else set 0 to open on first write
    }
 }
 

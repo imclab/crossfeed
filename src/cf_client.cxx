@@ -197,7 +197,7 @@ static const char *raw_log = "cf_raw.log";
 static FILE *raw_fp = 0;
 static bool raw_log_disabled = true;
 
-static const char *tracker_log = "cf_tracker.log";
+static const char *tracker_log = 0; // "cf_tracker.log";
 static FILE *tracker_fp = 0;
 static bool tracker_log_disabled = true;
 bool is_tracker_log_disabled() { return tracker_log_disabled; }
@@ -728,7 +728,8 @@ int Create_Tracker_Log()
 {
     tracker_fp = fopen( tracker_log, "a" ); // APPEND
     if (!tracker_fp) {
-        SPRTF("ERROR: Creating tracker log %s FAILED! Aborting...\n");
+        SPRTF("ERROR: Creating tracker log [%s] FAILED! %s. Aborting...\n", 
+            tracker_log, strerror(errno));
         return 1;
     }
     return 0;
@@ -1709,7 +1710,7 @@ void set_init_json()
     sprintf(EndBuf(cp),"\t\"min_speed_kt\":%d,\n", m_MinSpdChange_kt);
     sprintf(EndBuf(cp),"\t\"min_hdg_chg_deg\":%d,\n", m_MinHdgChange_deg);
     sprintf(EndBuf(cp),"\t\"min_alt_chg_ft\":%d,\n", m_MinAltChange_ft);
-    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log_disabled ? "none" : tracker_log ));
+    sprintf(EndBuf(cp),"\t\"tracker_log\":\"%s\"", (tracker_log_disabled ? "none" : tracker_log ? tracker_log : "none"));
     //sprintf(EndBuf(cp),",\n\t\"modify_callsign\":%s", (m_Modify_CALLSIGN ? "true" : "false"));  // def = true;
     sprintf(EndBuf(cp),",\n\t\"modify_aircraft\":%s", (m_Modify_AIRCRAFT ? "true" : "false"));  // def = false;
     sprintf(EndBuf(cp),",\n\t\"listen_addr\":\"%s\"", (m_ListenAddress.size() ? m_ListenAddress.c_str() : "IPADDR_ANY"));
@@ -1772,15 +1773,17 @@ int cf_client_main(int argc, char **argv)
         (m_ListenAddress.size() ? m_ListenAddress.c_str() : "IPADDR_ANY"), 
         m_ListenPort );
 
-    if ( !tracker_log_disabled && tracker_log ) {
+    if ( !tracker_log_disabled && tracker_log && strcmp(tracker_log,"none")) {
         if ( Create_Tracker_Log() )
             return 1; // if enabled, and failed, abort
-    }
+    } else
+        tracker_log_disabled = true;
 
     if ( !raw_log_disabled && raw_log ) {
         if ( Create_Raw_Log() )
             return 1; // if enabled, and failed, abort
-    }
+    } else
+        raw_log_disabled = true;
 
     if (m_TelnetPort && (m_TelnetPort > 0)) {
         if (Create_Telnet_Port()) {
