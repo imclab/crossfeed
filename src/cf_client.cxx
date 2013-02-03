@@ -234,11 +234,11 @@ void set_telnet_port( int port ) { m_TelnetPort = port; }
 int get_http_port() { return m_HTTPPort; }
 void set_http_port( int port ) { m_HTTPPort = port; }
 
-const char *get_raw_log() { return raw_log; }
+const char *get_raw_log() { return (raw_log ? raw_log : "none"); }
 void set_raw_log( const char *log ) { raw_log = strdup(log); } // "cf_raw.log";
 void set_raw_log_disable( bool set ) { raw_log_disabled = set; }
 
-const char *get_tracker_log() { return tracker_log; }
+const char *get_tracker_log() { return (tracker_log ? tracker_log : "none"); }
 void set_tracker_log( const char *log ) { tracker_log = strdup(log); } // "cf_tracker.log";
 void set_tracker_log_disable( bool set ) { tracker_log_disabled = set; }
 

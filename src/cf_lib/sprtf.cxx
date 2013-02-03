@@ -160,6 +160,8 @@ char * get_log_file( void )
 {
    if (logfile[0] == 0)
       strcpy(logfile,def_log);
+   if (outfile == (FILE *)-1) // disable the log file
+       return (char *)"none";
    return logfile;
 }
 
