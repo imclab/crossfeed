@@ -1,3 +1,15 @@
+2013/02/05 12:09:38
+
+    * Check the creation of a json file, if enabled, and abort if unable
+      to create a blank file.
+    * More fixes to ensure a file name is returned by get_..., else pointer to 
+      'none'.
+    * Small fix to ensure tracker log disabled by default.
+    * In unix, add app exit time UTC if daemon and by signal.
+    * Correct nanosleep converting seconds to milliseconds in windows port of
+      this function.
+    * Bumped AGE to 26.
+
 2013/01/27 11:37:43
 
     * Change the cmake project name to 'crossfeed'. Seems this

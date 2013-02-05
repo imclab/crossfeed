@@ -453,6 +453,8 @@ int Write_JSON()
         FILE *fp = fopen(pjson,"w");
         if (!fp) {
             SPRTF("%s: ERROR: Failed to create JSON file [%s]\n", mod_name, pjson);
+            json_file_disabled = true;
+            json_file = 0;  // only show FAILED once
             return 1;
         }
         wtn = fwrite(pjs->buf,1,pjs->used,fp);

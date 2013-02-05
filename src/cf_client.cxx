@@ -1776,14 +1776,30 @@ int cf_client_main(int argc, char **argv)
     if ( !tracker_log_disabled && tracker_log && strcmp(tracker_log,"none")) {
         if ( Create_Tracker_Log() )
             return 1; // if enabled, and failed, abort
-    } else
-        tracker_log_disabled = true;
+    } else if (!tracker_log || (strcmp(tracker_log,"none") == 0)) {
+        tracker_log_disabled = true; // ensure DISABLED
+    }
 
-    if ( !raw_log_disabled && raw_log ) {
+    if ( !raw_log_disabled && raw_log && strcmp(raw_log,"none")) {
         if ( Create_Raw_Log() )
             return 1; // if enabled, and failed, abort
-    } else
-        raw_log_disabled = true;
+    } else if (!raw_log || (strcmp(raw_log,"none") == 0)) {
+        raw_log_disabled = true; // ensure DISABLED
+    }
+
+    // test json file creation, IFF enabled
+    if ( !json_file_disabled && json_file && strcmp(json_file,"none")) {
+        FILE *fp = fopen(json_file,"w");
+        if (!fp) {
+            SPRTF("%s: ERROR: Failed to create JSON file [%s]\n", mod_name, json_file);
+            json_file_disabled = true;
+            json_file = 0;  // only show FAILED once
+            return 1; // if enabled, abd failed, abort
+        }
+        fclose(fp);
+    } else if ( !json_file || (strcmp(json_file,"none") == 0)) {
+        json_file_disabled = true; // ensure DISABLED
+    }
 
     if (m_TelnetPort && (m_TelnetPort > 0)) {
         if (Create_Telnet_Port()) {
@@ -1806,16 +1822,6 @@ int cf_client_main(int argc, char **argv)
                 m_HTTPPort );
     }
 
-#ifndef _MSC_VER
-	if (RunAsDaemon)
-	{
-        Myself = new cDaemon;
-		Myself->Daemonize ();
-		SG_LOG2 (SG_SYSTEMS, SG_ALERT, "# crossfeed client started as daemon!");
-		add_screen_out(0); // remove stdout output from logging
-	}
-#endif
-
 #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
     if (Enable_SQL_Tracker) {
         if (start_tracker_thread()) {
@@ -1824,6 +1830,16 @@ int cf_client_main(int argc, char **argv)
         }
     }
 #endif // #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
+
+#ifndef _MSC_VER
+	if (RunAsDaemon)
+	{
+		SG_LOG2 (SG_SYSTEMS, SG_ALERT, "# crossfeed client starting as daemon!");
+        Myself = new cDaemon;
+		Myself->Daemonize ();
+		add_screen_out(0); // remove stdout output from logging
+	}
+#endif
 
     set_init_json(); // setup initial 'info' json string
 
