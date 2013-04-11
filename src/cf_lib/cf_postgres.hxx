@@ -9,11 +9,11 @@
 
 typedef int (*SQLCB)(void*,int,char**,char**);
 
-#define DEF_PG_DB   "tracker"
+#define DEF_PG_DB   "crossfeed"
 #define DEF_PG_IP   "127.0.0.1"
 #define DEF_PG_PORT "5432"
-#define DEF_PG_USER "cf"
-#define DEF_PG_PWD  "Bravo747g"
+#define DEF_PG_USER "crossfeed"
+#define DEF_PG_PWD  "crossfeed"
 
 class cf_postgres 
 {

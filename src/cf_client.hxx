@@ -79,6 +79,9 @@ extern const char *get_tracker_log(); // { return tracker_log; }
 extern void set_tracker_log( const char *log ); // { tracker_log = strdup(log); } // "cf_tracker.log";
 extern void set_tracker_log_disable( bool set ); // { tracker_log_disabled = set; }
 
+extern const char *get_cf_log_file();     // { return def_cf_log; }
+extern void set_cf_log_file( char *log ); // { def_cf_log = strdup(log); }
+
 #endif // _CF_SERVER_HXX_
 // eof - cf_server.hxx
 

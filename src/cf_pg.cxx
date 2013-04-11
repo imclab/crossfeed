@@ -38,7 +38,7 @@
 #include <inttypes.h>
 #endif
 
-static const char *mod_name = "cf_pg.cxx"; // __FILE__;
+static const char *mod_name = "cf_pg"; // __FILE__;
 
 #ifdef USE_POSTGRESQL_DATABASE
 #include "cf_postgres.hxx"
@@ -178,6 +178,7 @@ void close_pg()
 {
     cf_postgres *ppg = get_db_instance();
     ppg->db_close();
+    SPRTF("%s: Closed PostgreSQL session\n", mod_name);
 }
 
 typedef struct tagSTMTBUF {
@@ -216,9 +217,9 @@ int db_init()
 
     rc = open_pg();
     if (rc) return rc;
-
-    rc = ppg->db_exec("UPDATE flights SET status='CLOSED' WHERE status='OPEN';");
-
+    const char *cmd = "UPDATE flights SET status='CLOSED' WHERE status='OPEN';";
+    rc = ppg->db_exec(cmd);
+    SPRTF("%s: Done exec [%s], return %d\n", mod_name, cmd, rc);
     return rc;
 }
 
@@ -355,6 +356,7 @@ void *Tracker_Func(void *vp)
     size_t max, ii, i2;
     PDATAMSG pdm;
     int res;
+    SPRTF("%s: Tracker Thread started.\n", mod_name);
     while (keep_thread_alive)
     {
         pthread_mutex_lock( &msg_mutex );   // acquire the lock
@@ -398,6 +400,7 @@ void *Tracker_Func(void *vp)
     	}
     }
     close_pg(); // close on thread exit
+    SPRTF("%s: Tracker Thread ended.\n", mod_name);
     return ((void *)0xdead);
 }
 

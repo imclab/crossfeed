@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <stdint.h> // uint64_t...
 #include <string.h> // strcpy() strcmp() ...
+#include <list>
 
 #ifndef _MSC_VER
 #ifndef __FreeBSD__
@@ -48,9 +49,22 @@
 #include <sys/msg.h>
 #endif // !_MSC_VER
 
+#include <simgear/compiler.h>
+#include <simgear/math/SGMath.hxx>
+#include <simgear/math/sg_geodesy.hxx>
+
 #include <libpq-fe.h>
 #include "sprtf.hxx"
 #include "cf_misc.hxx"
+
+#ifdef _MSC_VER
+#define strtoull  atoui64 //_strtoui64
+unsigned __int64 atoui64(const char *szUnsignedInt) {
+   return _strtoui64(szUnsignedInt, NULL, 10);
+}
+#endif
+
+static const char *mod_name = "test_pg";
 
 /* Miscellaneous constants */ 
 #define MAXLINE     4096        /* max text line length */ 
@@ -67,15 +81,15 @@
 #endif
 
 #ifndef DEF_DATABASE
-#define DEF_DATABASE "tracker_test"
+#define DEF_DATABASE "crossfeed"
 #endif
 
 #ifndef DEF_USER_LOGIN
-#define DEF_USER_LOGIN "cf"
+#define DEF_USER_LOGIN "crossfeed"
 #endif
 
 #ifndef DEF_USER_PWD
-#define DEF_USER_PWD "Bravo747g"
+#define DEF_USER_PWD "crossfeed"
 #endif
 
 static char *ip_address = (char *)DEF_IP_ADDRESS;
@@ -89,9 +103,20 @@ static char *pgtty = (char *)"";
 static int got_flights = 0;
 static int got_waypts = 0;
 
+// parameters for test 2
+static double m_MinDistanceM = 100.0;
+static size_t m_MinPositions = 5;
+static int m_DiscardedFlights = 0;
+
 #define PQ_EXEC_SUCCESS(res) ((PQresultStatus(res) == PGRES_COMMAND_OK)||(PQresultStatus(res) == PGRES_TUPLES_OK))
 
 static char _s_big_buff[MAXLINE];
+
+static int m_verbosity = 0;
+#define M_VERB1 (m_verbosity >= 1)
+#define M_VERB2 (m_verbosity >= 2)
+#define M_VERB5 (m_verbosity >= 5)
+#define M_VERB9 (m_verbosity >= 9)
 
 /* --------------------------------------
 PGconn *PQsetdbLogin(const char *pghost,
@@ -834,17 +859,419 @@ const char *sPosns[MX_PSN][MX_PFD] = {
 {"1355164948000","2012-12-10 18:42:28","43.4983232","-1.5324934","145","548","18"}
 };
 
+#ifndef MAX_MODEL_NAME_LEN
+#define MAX_MODEL_NAME_LEN      96
+#endif
+
+char *get_Model_str( char *pm )
+{
+    static char _s_buf[MAX_MODEL_NAME_LEN+4];
+    int i, c, len;
+    char *cp = _s_buf;
+    char *model = pm;
+    len = MAX_MODEL_NAME_LEN;
+    for (i = 0; i < len; i++) {
+        c = pm[i];
+        if (c == '/')
+            model = &pm[i+1];
+        else if (c == 0)
+            break;
+    }
+    strcpy(cp,model);
+    len = (int)strlen(cp);
+    model = 0;
+    for (i = 0; i < len; i++) {
+        c = cp[i];
+        if (c == '.')
+            model = &cp[i];
+    }
+    if (model)
+        *model = 0;
+    return cp;
+}
+
+char *get_FID_stg( uint64_t u )
+{
+    static char _s_fid_buf[128];
+    char *cp = _s_fid_buf;
+    sprintf(cp, "%" PFX64, u);
+    return cp;
+}
+
 /* Fetch flight record and display it on screen */
 /* template function from : http://www.askyb.com/cpp/c-postgresql-example/ */
+static bool use_view = false;
+static bool do_new_begin = false;
+
+// p_pk           fid            ts             lat            lon            spd_kts        alt_ft         hdg            
+// 121417         1365244944000  2013-04-06 10:42:4239.8680271     -75.2390200    12             26             255            
+// 120900         1365244944000  2013-04-06 10:42:4239.8680271     -75.2390200    12             26             255            
+
+enum fnd_flags {
+    f_lat = 0x01,
+    f_lon = 0x02,
+    f_spd = 0x04,
+    f_alt = 0x08,
+    f_hdg = 0x10
+};
+
+enum flt_flag {
+    ff_fid = 0x01,
+    ff_cs  = 0x02,
+    ff_mod = 0x04
+};
+
+#ifndef MAX_CALLSIGN_LEN
+#define MAX_CALLSIGN_LEN        8
+#endif
+#ifndef MAX_MODEL_NAME_LEN
+#define MAX_MODEL_NAME_LEN      96
+#endif
+
+typedef struct tagWPT {
+    double lat,lon;
+    int spd, alt, hdg;
+    double dist;
+}WPT, *PWPT;
+
+typedef std::list<WPT> lWPT;
+
+typedef struct tagFLT {
+    uint64_t fid;
+    char callsign[MAX_CALLSIGN_LEN];
+    char model[MAX_MODEL_NAME_LEN];
+    lWPT *pwpts;
+}FLT, *PFLT;
+
+typedef std::list<FLT> lFLT;
+
+lFLT lFlights;
+lFLT *get_flights_list() { return &lFlights; }
+
+/////////////////////////////////////////////////////////
+// show_f_flags - just for DIAG
+void show_f_flags(int flag)
+{
+    int flag_all = (f_lat|f_lon|f_spd|f_alt|f_hdg);
+    if (flag & f_lat) SPRTF("lat");
+    if (flag & f_lon) SPRTF("lon");
+    if (flag & f_spd) SPRTF("spd");
+    if (flag & f_alt) SPRTF("alt");
+    if (flag & f_hdg) SPRTF("hdg");
+    flag &= ~(flag_all);
+    if (flag) SPRTF("rem=%x",flag);
+}
+
+////////////////////////////////////////////////////////
+// show_geod - just for DIAG
+void show_sggeod( SGGeod & geod )
+{
+    SPRTF("lat=%f,lon=%f,alt=%d", geod.getLatitudeDeg(), geod.getLongitudeDeg(), 
+        (int)( geod.getElevationFt() + 0.5));
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// FetchPositionRecs()
+// Given a FID, fetch all records from position tables matching this FID
+// Accumulate posn records in list (if distance moved > m_MinDistanceM)
+// Accumulate flight records in list (if number of positions > m_MinPositions)
+// Some guards against adding BAD records...
+///////////////////////////////////////////////////////////////////////////////
+double cum_secs_in_fetch_posn = 0.0;
+bool show_fetch_2 = false;
+int FetchPositionRecs(PGconn *conn, FLT &flt)
+{
+    double bgn_secs = get_seconds();
+    int iret = 0;
+    int nFields, nTuples, i, j;
+    int fid_off = -1;
+    int ppk_off = -1;
+    int ts_off = -1;
+    int lat_off = -1;
+    int lon_off = -1;
+    int spd_off = -1;
+    int alt_off = -1;
+    int hdg_off = -1;
+    unsigned int flag;
+    int flag_all = (f_lat|f_lon|f_spd|f_alt|f_hdg);
+    WPT wpt;
+    PGresult *res;
+
+    if (do_new_begin) {
+        // Start a transaction block
+        PGresult *res  = PQexec(conn, "BEGIN");
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+             SPRTF("BEGIN command failed");
+             PQclear(res);
+             return 1;  // no BEGIN
+        }
+        // Clear result
+        PQclear(res);
+    }
+
+    // setup for trancd saction
+    char *stmt = GetNxtBuf();
+    char *cp = get_FID_stg(flt.fid);
+    sprintf(stmt,"DECLARE emprec2 CURSOR FOR SELECT * FROM positions WHERE fid='%s';",cp);
+    res = PQexec(conn, stmt);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        SPRTF("DECLARE CURSOR failed\n");
+        PQclear(res);
+        iret = 1;
+        goto End_Trans2;
+    }
+    // Clear result
+    PQclear(res);
+ 
+    res = PQexec(conn, "FETCH ALL in emprec2;");
+ 
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        SPRTF("FETCH ALL failed!\n");
+        PQclear(res);
+        iret = 1;
+        goto End_Trans;
+    }
+    
+    // Get the field name
+    nFields = PQnfields(res);
+    nTuples = PQntuples(res);
+    if (M_VERB5 || show_fetch_2) SPRTF("Fetch position records for FID: %s nFields=%d, nTuples=%d\n", cp, nFields, nTuples);
+    flag = 0;
+    for (i = 0; i < nFields; i++) {
+        cp = PQfname(res, i);
+        if (strcmp(cp,"p_pk") == 0) {
+            ppk_off = i;
+            continue;
+        } else if (strcmp(cp,"fid") == 0) {
+            fid_off = i;
+            continue;
+        } else if (strcmp(cp,"ts") == 0) {
+            ts_off = i;
+            continue;
+        } else if (strcmp(cp,"lat") == 0) {
+            lat_off = i;
+            flag |= f_lat;
+        } else if (strcmp(cp,"lon") == 0) {
+            lon_off = i;
+            flag |= f_lon;
+        } else if (strcmp(cp,"spd_kts") == 0) {
+            spd_off = i;
+            flag |= f_spd;
+        } else if (strcmp(cp,"alt_ft") == 0) {
+            alt_off = i;
+            flag |= f_alt;
+        } else if (strcmp(cp,"hdg") == 0) {
+            hdg_off = i;
+            flag |= f_hdg;
+        }
+        if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+    }
+    if (flag == flag_all) {
+        if (M_VERB5 || show_fetch_2) SPRTF(" ok");
+    } else {
+        show_f_flags(flag);
+        SPRTF(" Fetch FAILED\n");
+        goto End_Trans;
+    }
+    if (M_VERB5 || show_fetch_2) SPRTF("\n");
+    // Next, print out the flight record for each row
+    // p_pk           fid            ts
+    // lat lon spd_kts alt_ft hdg            
+    for (i = 0; i < nTuples; i++) {
+        flag = 0;
+        for (j = 0; j < nFields; j++) {
+            if (j == ppk_off) continue;
+            if (j == fid_off) continue;
+            if (j == ts_off ) continue;
+            cp = PQgetvalue(res, i, j);
+            if (j == lat_off) {
+                wpt.lat = atof(cp);
+                flag |= f_lat;
+            } else if (j == lon_off) {
+                wpt.lon = atof(cp);
+                flag |= f_lon;
+            } else if (j == spd_off) {
+                wpt.spd = atoi(cp);
+                flag |= f_spd;
+            } else if (j == alt_off) {
+                wpt.alt = atoi(cp);
+                flag |= f_alt;
+            } else if (j == hdg_off) {
+                wpt.hdg = atoi(cp);
+                flag |= f_hdg;
+            }
+            if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+        }
+        if (flag == flag_all) {
+            if (M_VERB5 || show_fetch_2) SPRTF(" ok ");
+        } else {
+            SPRTF(" Tuplets FAILED\n");
+            goto End_Trans;
+        }
+        SGGeod GeodPoint = SGGeod::fromDegM(wpt.lon, wpt.lat,
+             wpt.alt*SG_FEET_TO_METER);
+        // show_sggeod(GeodPoint);
+        if (M_VERB5 || show_fetch_2) SPRTF("\n");
+        if (flt.pwpts) {
+            WPT lwpt = flt.pwpts->back(); // get last
+            SGGeod lgeod = SGGeod::fromDegM(lwpt.lon, lwpt.lat, lwpt.alt*SG_FEET_TO_METER);
+            wpt.dist = SGGeodesy::distanceM(GeodPoint,lgeod);
+            if (wpt.dist > m_MinDistanceM) {
+                wpt.dist += lwpt.dist;
+                flt.pwpts->push_back(wpt);
+            }
+        } else {
+            wpt.dist = 0;
+            flt.pwpts = new lWPT;
+            flt.pwpts->push_back(wpt);
+        }
+
+    }
+    PQclear(res);
+ 
+End_Trans:
+
+    // Close the emprec
+    res = PQexec(conn, "CLOSE emprec2");
+    PQclear(res);
+ 
+End_Trans2:
+
+    if (do_new_begin) {
+        // End the transaction
+        res = PQexec(conn, "END");
+        // Clear result
+        PQclear(res);
+    }
+
+    if (flt.pwpts) {
+        if (flt.pwpts->size() > m_MinPositions) {
+            lFLT *pl = get_flights_list();
+            pl->push_back(flt);
+        } else {
+            delete flt.pwpts;
+            flt.pwpts = 0;
+            m_DiscardedFlights++;
+        }
+    } else {
+        m_DiscardedFlights++;
+    }
+ 
+    cum_secs_in_fetch_posn += (get_seconds() - bgn_secs);
+    return iret;
+}
+
+const char *flt_json = "tempflts.json";
+size_t m_MaxWrite = 1024;
+
+double get_nm_decimal1( double m )
+{
+    double nm = m * SG_METER_TO_NM;
+    int inm = (int)((nm + 0.05) * 10.0);
+    nm = (double)inm / 10;
+    return nm;
+}
+
+void out_flights()
+{
+    lFLT *pflts = get_flights_list();
+    size_t max = pflts->size();
+    size_t ii, total, total_wpts;
+    int wtn;
+    int total_wtn;
+    if (max == 0)
+        return;
+    total = 0;
+    total_wtn = 0;
+    total_wpts = 0;
+    FILE *pf = fopen(flt_json,"w");
+    if (pf) {
+        //int wtn = fwrite( s.c_str(), 1, s.size(), pf );
+        //fclose(pf);
+        SPRTF("%s: Flights json will be written to %s\n", mod_name, flt_json);
+    } else {
+        SPRTF("%s: ERROR: Flights json %s create FAILED!\n", mod_name, flt_json);
+        return;
+    }
+    char *tb = GetNxtBuf();
+    sprintf(tb,"{\"success\":true,\"update\":\"%s UTC\",\"source\":\"%s\",\"fltcnt\":%d", get_gmt_stg(),
+        database,  (int)max);
+    std::string s(tb);
+    s += ",\"flights\":[\n";
+
+    while ( !pflts->empty() ) {
+        FLT flt = pflts->front();
+        pflts->pop_front();
+        char *pfid = get_FID_stg(flt.fid);
+        s += "{\"fid\":";
+        s += pfid;
+        s += ",\"callsign\":\"";
+        s += flt.callsign;
+        s += "\"";
+        s += ",\"model\":\"";
+        s += flt.model;
+        s += "\"";
+        if (flt.pwpts) {
+            ii = flt.pwpts->size();
+            total_wpts += ii;
+            sprintf(tb,",\"wptcnt\":%d", (int)ii);
+            s += tb;
+            s += ",\"wpts\":[\n";
+            while ( !flt.pwpts->empty() ) {
+                WPT wpt = flt.pwpts->front();
+                flt.pwpts->pop_front();
+                sprintf(tb,"{\"lat\":%f,\"lon\":%f,\"alt_ft\":%d,\"spd_kt\":%d,\"hdg\":%d,\"dist_nm\":%.1f}",
+                    wpt.lat, wpt.lon, wpt.alt, wpt.spd, wpt.hdg,
+                    get_nm_decimal1(wpt.dist));
+                s += tb;
+                if ( !flt.pwpts->empty() )
+                    s += ",";
+                s += "\n";
+            }
+            delete flt.pwpts;
+            s += "]";
+        }
+        s += "}";
+        if ( !pflts->empty() )
+            s += ",";
+        s += "\n";
+        if (s.size() > m_MaxWrite) {
+            wtn = fwrite( s.c_str(), 1, s.size(), pf );
+            total += s.size();
+            total_wtn += wtn;
+            s = ""; // restart string accumulation
+        }
+    }
+    s += "]}\n";
+    wtn = fwrite( s.c_str(), 1, s.size(), pf );
+    total += s.size();
+    total_wtn += wtn;
+    // m_DiscardedFlights
+    SPRTF("Flights json %d bytes, written to %s (%d)\n", (int)total, flt_json, total_wtn);
+    SPRTF("Written %d flights, with %d waypoints, discarded %d flights, where dist < %d m, or < %d wpts.\n", 
+        (int)max, (int)total_wpts, (int)m_DiscardedFlights,
+        (int)m_MinDistanceM, (int)m_MinPositions);
+    fclose(pf);
+}
+
 int FetchFlightRecs(PGconn *conn)
 {
+    int iret = 0;
     // Will hold the number of fields in flights table
     int nFields, nTuples, i, j;
- 
+    char *cp;
+    int mod_off = -1;
+    int fid_off = -1;
+    int cs_off  = -1;
+    FLT flt;
+    int flag;
+    int flag_all = (ff_fid|ff_cs|ff_mod);
+    double bgn_secs = get_seconds();
+    double diff;
     // Start a transaction block
     PGresult *res  = PQexec(conn, "BEGIN");
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-         SPRTF("BEGIN command failed");
+         SPRTF("BEGIN command failed\n");
          PQclear(res);
          return 1;
     }
@@ -852,7 +1279,10 @@ int FetchFlightRecs(PGconn *conn)
     PQclear(res);
 
     // Fetch rows from flights table
-    res = PQexec(conn, "DECLARE emprec CURSOR FOR select * from v_flights_open");
+    if (use_view)
+        res = PQexec(conn, "DECLARE emprec CURSOR FOR select * from v_flights_open");
+    else
+        res = PQexec(conn, "DECLARE emprec CURSOR FOR SELECT * FROM flights WHERE status='CLOSED';");
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         SPRTF("DECLARE CURSOR failed\n");
         PQclear(res);
@@ -866,26 +1296,104 @@ int FetchFlightRecs(PGconn *conn)
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         SPRTF("FETCH ALL failed!\n");
         PQclear(res);
-        return 1;
+        iret = 1;
+        goto End_Trans;
     }
     
     // Get the field name
     nFields = PQnfields(res);
     nTuples = PQntuples(res);
-    SPRTF("Fetch flight records: nFields=%d, nTuples=%d\n", nFields, nTuples);
+    diff = (get_seconds() - bgn_secs);
+    SPRTF("Fetch flight records: nFields=%d, nTuples=%d in %s\n", nFields, nTuples,
+        get_seconds_stg(diff));
 
-    // Prepare the header with flights table field name
-    for (i = 0; i < nFields; i++)
-        SPRTF("%-15s", PQfname(res, i));
-    SPRTF("\n");
+    if (use_view) {
+        // Prepare the header with flights table field name
+        for (i = 0; i < nFields; i++) {
+            cp = PQfname(res, i);
+            if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+            if (strcmp(cp,"model") == 0)
+                mod_off = i;    // keep model offset
+            else if (strcmp(cp,"fid") == 0)
+                fid_off = i;
+            else if (strcmp(cp,"callsign") == 0)
+                cs_off = i;
+        }
+        if (M_VERB5 || show_fetch_2) SPRTF("\n");
 
-    // Next, print out the flight record for each row
-    for (i = 0; i < nTuples; i++) {
-         for (j = 0; j < nFields; j++)
-             SPRTF("%-15s", PQgetvalue(res, i, j));
-         SPRTF("\n");
+        // Next, print out the flight record for each row
+        for (i = 0; i < nTuples; i++) {
+             for (j = 0; j < nFields; j++) {
+                 cp = PQgetvalue(res, i, j);
+                 if (j == mod_off) {
+                     cp = get_Model_str(cp);
+                     strcpy(flt.model,cp);
+                 } else if (j == cs_off) {
+                     strcpy(flt.callsign,cp);
+                 } else if (j == fid_off) {
+                     flt.fid = strtoull(cp);
+                 }
+                 if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+             }
+             if (M_VERB5 || show_fetch_2) SPRTF("\n");
+        }
+    } else {
+        // f_pk           fid            callsign       model          status         
+        // Show only fid callsign  model
+        flag = 0;
+        for (i = 0; i < nFields; i++) {
+            cp = PQfname(res, i);
+            if (strcmp(cp,"f_pk") == 0)
+                continue;
+            else if (strcmp(cp,"model") == 0) {
+                mod_off = i;    // keep model offset
+                flag |= ff_mod;
+            } else if (strcmp(cp,"fid") == 0) {
+                fid_off = i;
+                flag |= ff_fid;
+            } else if (strcmp(cp,"callsign") == 0) {
+                cs_off = i;
+                flag |= ff_cs;
+            } else if (strcmp(cp,"status") == 0)
+                continue;
+            if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+        }
+        if (flag == flag_all) {
+            if (M_VERB5 || show_fetch_2) SPRTF(" ok");
+        }
+        if (M_VERB5 || show_fetch_2) SPRTF("\n");
+        // Next, print out the flight record for each row
+        for (i = 0; i < nTuples; i++) {
+            flag = 0;
+             for (j = 0; j < nFields; j++) {
+                 cp = PQgetvalue(res, i, j);
+                 if (j == mod_off) {
+                     cp = get_Model_str(cp);
+                     strcpy(flt.model,cp);
+                     flag |= ff_mod;
+                 } else if (j == cs_off) {
+                     strcpy(flt.callsign,cp);
+                     flag |= ff_cs;
+                 } else if (j == fid_off) {
+                     flt.fid = strtoull(cp);
+                     flag |= ff_fid;
+                 } else
+                     continue;
+                 if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
+             }
+             if (M_VERB5 || show_fetch_2) SPRTF("\n");
+             flt.pwpts = 0;
+             if (flag == flag_all) {
+                 if (FetchPositionRecs(conn, flt)) {
+                    iret = 1;
+                    goto End_Trans;
+                 }
+            }
+        }
     }
-   
+
+End_Trans:
+
     PQclear(res);
  
     // Close the emprec
@@ -897,8 +1405,16 @@ int FetchFlightRecs(PGconn *conn)
  
     // Clear result
     PQclear(res);
- 
-    return 0;
+
+    diff = (get_seconds() - bgn_secs);
+    SPRTF("Records fetched in total %s, ",
+        get_seconds_stg(diff) );
+    SPRTF("with %s spent in fetching positions\n", get_seconds_stg(cum_secs_in_fetch_posn));
+     
+    out_flights();
+
+
+    return iret;
 }
 
 int process_data(PGconn *conn)
@@ -1032,9 +1548,15 @@ int add_transactions(PGconn *conn)
     return rc;
 }
 
+/* ----
+   To run in Debug MSVC, need to add to environment
+   PATH=%PATH%;C:\Program Files (x86)\PostgreSQL\9.1\bin;C:\FG\17\3rdParty\bin
+   or as necessary to suit your setup.
+   ---- */
 int main( int argc, char **argv )
 {
-    int rc;
+    double bgn_secs = get_seconds();
+    int rc, i;
     PGconn *conn = NULL;
 
     set_log_file((char *)"temptest.txt");
@@ -1042,15 +1564,16 @@ int main( int argc, char **argv )
 
     if (parse_commands(argc,argv))
         return 1;
-
-    SPRTF("Attempting connection on [%s], port [%s], database [%s], user [%s], plus a pwd\n",
-        ip_address, port, database, user );
+    i = add_sys_date(1);
+    SPRTF("%s: Attempting connection on [%s], port [%s],\n database [%s], user [%s], plus pwd\n", mod_name,
+        ip_address, port, database, user ); // pwd );
+    i = add_sys_date(i);
 
     rc = ConnectDB(&conn);
     if (rc)
         return 1;
 
-    SPRTF("Connection successful...\n");
+    SPRTF("%s: Connection successful...\n", mod_name);
     
     if (do_test_one || do_test_two || do_test_three || do_test_four || do_test_five)
     {
@@ -1081,7 +1604,7 @@ int main( int argc, char **argv )
         SPRTF("No tests are enabled. Use command 123 to enable. -? for help.\n");
     }
 
-    SPRTF("Closing connection...\n");
+    SPRTF("%s: Closing connection...\n",mod_name);
     PQfinish(conn);
 
     if (do_test_four) {
@@ -1093,7 +1616,11 @@ int main( int argc, char **argv )
         rc |= test_template1();
     }
     
-    SPRTF("End test_pg - return(%d)\n",rc);
+    i = add_sys_date(1);
+    SPRTF("%s: End - return(%d)\n",mod_name, rc);
+    i = add_sys_date(0);
+    SPRTF("%s: Total runtime %s\n", mod_name, get_seconds_stg(get_seconds() - bgn_secs));
+
     return rc;
 }
 

@@ -100,6 +100,10 @@ enum { Lat, Lon, Alt };
 
 static const char *mod_name = "cf_pilot";
 
+// forward references
+char *get_Model( char *pm );
+
+
 time_t m_PlayerExpires = 10;     // standard expiration period (seconds)
 double m_MinDistance_m = 2000.0;  // started at 100.0;   // got movement (meters)
 int m_MinSpdChange_kt = 20;
@@ -107,6 +111,13 @@ int m_MinHdgChange_deg = 1;
 int m_MinAltChange_ft = 100;
 //bool m_Modify_CALLSIGN = true;  // Do need SOME modification (for SQL and json)
 bool m_Modify_AIRCRAFT = false;
+
+static int m_ExpiredCnt = 0;    // total of expired in vector
+// maybe when this reaches some maximum watermark, they are 
+// all erased, but be warned erasing in a vector causes a
+// reallocation of ALL vector memory from the erase point to the end
+static int m_MaxExpired = 100;
+#define ADD_VECTOR_ERASE
 
 enum Pilot_Type {
     pt_Unknown,
@@ -281,10 +292,11 @@ void Pilot_Tracker_Position(PCF_Pilot pp)
 // are sent. At a 10 second TTL this expires a flight 
 // prematurely, only to be revived 10-30 seconds later.
 // ===========================================================
+typedef vector<size_t> vSZT;
 void Expire_Pilots()
 {
     vCFP *pvlist = &vPilots;
-    size_t max, ii;
+    size_t max, ii, xcnt, nxcnt;
     PCF_Pilot pp;
     time_t curr = time(0);  // get current epoch seconds
     time_t diff;
@@ -292,9 +304,13 @@ void Expire_Pilots()
     iExp = (int)m_PlayerExpires;
     char *tb = GetNxtBuf();
     max = pvlist->size();
+    xcnt = 0;
+    nxcnt = 0;
     for (ii = 0; ii < max; ii++) {
         pp = &pvlist->at(ii);
-        if ( !pp->expired ) {
+        if ( pp->expired ) {
+            xcnt++;
+        } else {
             // diff = curr - pp->curr_time;
             diff = curr - pp->last_seen; // 20121222 - Use LAST SEEN for expiry
             idiff = (int)diff;
@@ -306,9 +322,33 @@ void Expire_Pilots()
                 //print_pilot(pp,"EXPIRED");
                 print_pilot(pp, tb, pt_Expired);
                 Pilot_Tracker_Disconnect(pp);
+                nxcnt++;
             }
         }
     }
+    m_ExpiredCnt = (xcnt + nxcnt);
+
+#ifdef ADD_VECTOR_ERASE
+    if (m_MaxExpired && (m_ExpiredCnt > m_MaxExpired)) {
+        // time to clean up vector memory
+        vSZT vst;
+        for (ii = 0; ii < max; ii++) {
+            pp = &pvlist->at(ii);
+            if ( pp->expired ) {
+                vst.push_back(ii);
+            }
+        }
+        while (!vst.empty()) {
+            ii = vst.back();
+            vst.pop_back();
+            pvlist->erase(pvlist->begin() + ii);
+        }
+        ii = pvlist->size();
+        SPRTF("%s: Removed %d expired pilots from vector. Was %d, now %d\n", mod_name,
+            (int) m_ExpiredCnt, (int) max, (int) ii );
+        m_ExpiredCnt = 0;
+    }
+#endif // #ifdef ADD_VECTOR_ERASE
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -322,6 +362,7 @@ typedef struct tagJSONSTR {
 }JSONSTR, *PJSONSTR;
 
 static PJSONSTR _s_pJsonStg = 0;
+static PJSONSTR _s_pXmlStg = 0;
 
 const char *header = "{\"success\":true,\"source\":\"cf-client\",\"last_updated\":\"%s\",\"flights\":[\n";
 const char *tail   = "]}\n";
@@ -338,6 +379,17 @@ void Realloc_JSON_Buf(PJSONSTR pjs, int len)
             exit(1);
         }
     }
+}
+
+int Append_2_Buf( PJSONSTR pjs, char *buf )
+{
+    int len = (int)strlen(buf);
+    if ((pjs->used + len) >= pjs->size) {
+        Realloc_JSON_Buf(pjs,len);
+    }
+    strcat(pjs->buf,buf);
+    pjs->used += len;
+    return len;
 }
 
 int Add_JSON_Head(PJSONSTR pjs) 
@@ -360,6 +412,106 @@ long write_count = 0;
 #ifndef DEF_JSON_SIZE
 #define DEF_JSON_SIZE 1024; // 16 for testing
 #endif
+
+////////////////////////////////////////////////////////////////////////////
+// XML Feed - FIX20130404 - Add XML feed
+int Get_XML( char **pbuf )
+{
+    PJSONSTR pjs = _s_pXmlStg;
+    if (pjs) {
+        *pbuf = pjs->buf;
+        return pjs->used;
+    }
+    return 0;
+}
+/* ------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+ <fg_server pilot_cnt="35">
+  <marker spd_kt="123" heading="221" alt="137" lng="-88.270755" lat="30.504218" 
+  model="Dragonfly" server_ip="" callsign="jmckay"/>
+  ... plus 34 more ...
+ </fg_server>
+ Was
+  <marker roll="0.271530002355576" pitch="0.205735370516777" heading="221.242599487305" 
+  alt="137.212286" lng="-88.270755" lat="30.504218" model="Dragonfly" server_ip="mpserver01" 
+  callsign="jmckay"/>
+ ------------------------------------ */
+
+const char *x_head = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+const char *x_open = "<fg_server pilot_cnt=\"%d\">\n";
+const char *x_mark = "<marker spd_kt=\"%d\" heading=\"%d\" alt=\"%d\" lng=\"%.6f\" lat=\"%.6f\" model=\"%s\" server_ip=\"%s\" callsign=\"%s\"/>\n";
+const char *x_tail = "</fg_server>\n";
+
+int Write_XML() // FIX20130404 - Add XML feed
+{
+    struct in_addr in;
+    static char _s_xbuf[1028];
+    PJSONSTR pxs = _s_pXmlStg;
+    char *paddr;
+    if (!pxs) {
+        pxs = new JSONSTR;
+        pxs->size = DEF_JSON_SIZE;
+        pxs->buf = (char *)malloc(pxs->size);
+        if (!pxs->buf) {
+            SPRTF("%s: ERROR: Failed in memory allocation! Size %d. Aborting\n", mod_name, pxs->size);
+            exit(1);
+        }
+        pxs->used = 0;
+        _s_pXmlStg = pxs;
+    }
+    vCFP *pvlist = &vPilots;
+    size_t max, ii;
+    PCF_Pilot pp;
+    char *pb = _s_xbuf;
+    int len, count;
+    max = pvlist->size();
+    // clear pevious
+    pxs->buf[0] = 0;
+    pxs->used   = 0;
+    if (!max)
+        return 0;
+    count = 0;
+    for (ii = 0; ii < max; ii++) {
+        pp = &pvlist->at(ii);
+        if ( pp->expired )
+            continue;
+        count++;
+    }
+    Append_2_Buf( pxs, (char *)x_head );
+    sprintf(pb,x_open,count);
+    Append_2_Buf( pxs, pb );
+    for (ii = 0; ii < max; ii++) {
+        pp = &pvlist->at(ii);
+        if ( pp->expired )
+            continue;
+        in.s_addr = pp->SenderAddress;
+        paddr = inet_ntoa(in);
+        if (!paddr) paddr = (char *)"";
+        // "<marker spd_kt=\"%d\"
+        // heading=\"%d\"
+        // alt=\"%d\"
+        // lng=\"%.6f\"
+        // lat=\"%.6f\"
+        // model=\"%s\"
+        // server_ip=\"%s\"
+        // callsign=\"%s\"/>\n";
+        len = sprintf(pb,x_mark,
+            (int)(pp->speed + 0.5),
+            (int)(pp->heading + 0.5),
+            (int)(pp->alt + 0.5),
+            pp->lon,
+            pp->lat,
+            get_Model(pp->aircraft),
+            paddr,
+            pp->callsign );
+        Append_2_Buf( pxs, pb );
+    }
+    Append_2_Buf( pxs, (char *)x_tail );
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////
+
 int Get_JSON( char **pbuf )
 {
     PJSONSTR pjs = _s_pJsonStg;
@@ -633,6 +785,7 @@ void show_pilot_stats()
     PCF_Pilot pp;
     vCFP *pvcf = &vPilots;
     max = pvcf->size();
+    SPRTF("Pilots STATS: %d in vector, %d expired\n", (int)max, (int)m_ExpiredCnt);
     for (ii = 0; ii < max; ii++) {
         pp = &pvcf->at(ii);
         print_pilot(pp,(char *)"STAT",pt_Stat);

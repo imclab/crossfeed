@@ -1,3 +1,27 @@
+2013/04/04 15:00:05 geoff
+
+    * Add an XML pilot list feed on URL 'GET /flights.xml HTTP...'. The is 
+      the SAME data as the json feed, except in XML format complinant with
+      mpmap from http://mpmap01.flightgear.org/fg_server_xml.cgi?mpserver12.flightgear.org:5001
+      however roll and pitch have been removed, and spd_kt="123" (TAS) added. Also 
+      spd_kt, alt, heading are given as rounded up integers only. This is updated each second.
+    * To conform to this URL style the json feed is on 'GET /flights.json HTTP...", but 
+      also remains on /data.
+    * Methods other than GET are now replied to with 405 Method Not Allowed, adding 
+      "Allow : GET\r\n" to the reply if GET other than /flights.json, /flights.xml, /data, /info or /
+    * The MX_PACKET_SIZE set to 1200 (from 1024) to agree with FG multiplayermgr.cxx 
+      which has had this value since before Sept 2008, the then CVS source.
+    * A version file added containing the version string which is read in by the CMakeLists.txt
+      as is now done in SG/FG. CMakeLists.txt will abort if NO version file found.
+    * Enhanced test_pg, especially test 2, to output 'CLOSED' flights, and each related positions
+      entry for each FID. Points out a considerable number of somewhat 'useless' records, where there
+      are no position records, or just a few, or the aircraft did not really move. Writes a big 
+      json file of the results of the queries, with timing...
+    * Updated test_http to respond to the same URI as cf_client, passing back canned data for 
+      testing.
+    * Version bumped to 1.0.28
+
+
 2013/02/05 12:09:38
 
     * Check the creation of a json file, if enabled, and abort if unable

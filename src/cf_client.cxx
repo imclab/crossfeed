@@ -143,7 +143,8 @@ unsigned int m_sleep_msec = 100; // if no data reception, sleep for a short time
 #endif
 
 #ifndef MX_PACKET_SIZE
-#define MX_PACKET_SIZE 1024
+#define MX_PACKET_SIZE 1200 // should agree with FG multiplayemgr.cxx, which
+                            // has been 1200 since before Sept, 2008 - ie CVS source
 #endif
 
 #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
@@ -151,6 +152,15 @@ bool Enable_SQL_Tracker = true;
 #else
 bool Enable_SQL_Tracker = false;
 #endif
+
+#ifdef _MSC_VER // use local log
+static const char *def_cf_log = "cf_client.txt";
+#else
+static const char *def_cf_log = "/var/log/crossfeed/cf_client.log";
+#endif
+
+const char *get_cf_log_file() { return def_cf_log; }
+void set_cf_log_file( char *log ) { def_cf_log = strdup(log); }
 
 double m_dSecs_in_HTTP = 0.0;
 double m_dBegin_Secs = 0.0;
@@ -190,7 +200,7 @@ int iRecvCnt = 0;
 int iFailedCnt = 0;
 int iMaxFailed = 10;
 int iStatDelay = 5*60; // each 5 mins
-int iByteCnt = 0;
+uint64_t ui64ByteCnt = 0;
 static int max_FailedCnt = 10;
 
 static const char *raw_log = "cf_raw.log";
@@ -216,7 +226,8 @@ static netSocket *m_HTTPSocket = 0;
 static int m_HTTPPort = HTTP_PORT;
 static string m_HTTPAddress = SERVER_ADDRESS;
 static int m_HTTPReceived = 0;
-
+static int m_JReceived = 0;
+static int m_XReceived = 0;
 static netSocket *m_ListenSocket = 0;
 static int m_ListenPort = SERVER_PORT;
 static string m_ListenAddress = "";
@@ -359,7 +370,7 @@ int parse_commands( int argc, char **argv )
     scan_for_help( argc, argv ); // will NOT return if found
 
     if (loadRCFile()) {
-        SPRTF("%s: ERROR: The " CF_RC_FILE " file NOT valid. Fix, rename or delete! Aborting...\n", mod_name );
+        fprintf(stderr,"%s: ERROR: The " CF_RC_FILE " file NOT valid. Fix, rename or delete! Aborting...\n", mod_name );
         exit(1);
     }
     for ( i = 1; i < argc; i++ ) {
@@ -376,15 +387,15 @@ int parse_commands( int argc, char **argv )
                 if (i2 < argc) {
                     sarg = argv[i2];
                     if (readINI(sarg)) {
-                        SPRTF("%s: ERROR: Confguration INI file %s FAILED!\n",mod_name, sarg);
+                        fprintf(stderr,"%s: ERROR: Confguration INI file %s FAILED!\n",mod_name, sarg);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: Confguration INI file must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: Confguration INI file must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Read INI file [%s]\n", mod_name, sarg );
+                if (VERB1) printf("%s: Read INI file [%s]\n", mod_name, sarg );
                 break;
             case 'A':
                 if (i2 < argc) {
@@ -393,10 +404,10 @@ int parse_commands( int argc, char **argv )
                     m_TelnetAddress = sarg;
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: HTTP and Telnet IP address must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: HTTP and Telnet IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set HTTP and Telnet IP address to %s\n", mod_name, sarg );
+                if (VERB1) printf("%s: Set HTTP and Telnet IP address to %s\n", mod_name, sarg );
                 break;
             case 'I':
                 if (i2 < argc) {
@@ -407,10 +418,10 @@ int parse_commands( int argc, char **argv )
                         m_ListenAddress = "";
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: fgms IP address must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: fgms IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set listen address to %s\n", mod_name, sarg );
+                if (VERB1) printf("%s: Set listen address to %s\n", mod_name, sarg );
                 break;
             case 'P':
                 if (i2 < argc) {
@@ -418,15 +429,15 @@ int parse_commands( int argc, char **argv )
                     if (is_digits(sarg))
                         m_ListenPort = atoi(sarg);
                     else {
-                        SPRTF("%s: ERROR: fgms server PORT value must be digits only!\n", mod_name);
+                        fprintf(stderr,"%s: ERROR: fgms server PORT value must be digits only!\n", mod_name);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: fgms server PORT value must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: fgms server PORT value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set fgms server PORT to %d\n", mod_name, m_ListenPort );
+                if (VERB1) printf("%s: Set fgms server PORT to %d\n", mod_name, m_ListenPort );
                 break;
             case 'T':
                 if (i2 < argc) {
@@ -434,15 +445,15 @@ int parse_commands( int argc, char **argv )
                     if (is_digits(sarg))
                         m_TelnetPort = atoi(sarg);
                     else {
-                        SPRTF("ERROR: PORT value must be digits only!\n");
+                        fprintf(stderr,"ERROR: PORT value must be digits only!\n");
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("ERROR: telnet PORT value must follow!\n");
+                    fprintf(stderr,"ERROR: telnet PORT value must follow!\n");
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set telnet PORT to %d\n", mod_name, m_TelnetPort );
+                if (VERB1) printf("%s: Set telnet PORT to %d\n", mod_name, m_TelnetPort );
                 break;
             case 'H':
                 if (i2 < argc) {
@@ -450,21 +461,21 @@ int parse_commands( int argc, char **argv )
                     if (is_digits(sarg))
                         m_HTTPPort = atoi(sarg);
                     else {
-                        SPRTF("%s: ERROR: HTTP PORT value must be digits only!\n",mod_name);
+                        fprintf(stderr,"%s: ERROR: HTTP PORT value must be digits only!\n",mod_name);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: HTTP PORT value must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: HTTP PORT value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set HTTP PORT to %d\n", mod_name, m_HTTPPort );
+                if (VERB1) printf("%s: Set HTTP PORT to %d\n", mod_name, m_HTTPPort );
                 break;
 #ifndef _MSC_VER
             // SPRTF(" --daemon       (-d) = Run as daemon. (def=%s)\n", (RunAsDaemon ? "on" : "off"));
             case 'd':
                 RunAsDaemon = 1;
-                if (VERB1) SPRTF("%s: Set to run as Daemon.\n", mod_name );
+                if (VERB1) printf("%s: Set to run as Daemon.\n", mod_name );
                 break;
 #endif // !_MSC_VER
             //    SPRTF(" --json file    (-j) = Set the output file for JSON. (def=%s)\n", json_file);
@@ -477,31 +488,31 @@ int parse_commands( int argc, char **argv )
                         json_file_disabled = true;
                     i++;
                 } else {
-                    SPRTF("ERROR: json file value must follow!\n");
+                    fprintf(stderr,"ERROR: json file value must follow!\n");
                     goto Bad_ARG;
                 }
                 if (VERB1) {
                     if (json_file_disabled)
-                        SPRTF("%s: json file disabled.\n", mod_name);
+                        printf("%s: json file disabled.\n", mod_name);
                     else
-                        SPRTF("%s: Set json output to [%s]\n", mod_name, json_file);
+                        printf("%s: Set json output to [%s]\n", mod_name, json_file);
                 }
                 break;
             // SPRTF(" --log file     (-l) = Set the log output file. (def=%s)\n", get_log_file());
             case 'l':
                 if (i2 < argc) {
                     sarg = argv[i2];
-                    set_log_file(sarg); // this checks for 'none', to DISABLE log
+                    set_cf_log_file(sarg); // this checks for 'none', to DISABLE log
                     i++;
                 } else {
-                    SPRTF("ERROR: log file value must follow!\n");
+                    fprintf(stderr,"ERROR: log file value must follow!\n");
                     goto Bad_ARG;
                 }
                 if (VERB1) {
                     if (strcmp(sarg,"none"))
-                        SPRTF("%s: Set log output to [%s]\n", mod_name, get_log_file());
+                        printf("%s: Set log output to [%s]\n", mod_name, get_log_file());
                     else
-                        SPRTF("%s: Set log output DISABLED.\n", mod_name);
+                        printf("%s: Set log output DISABLED.\n", mod_name);
                 }
                 break;
             case 'L':
@@ -510,19 +521,19 @@ int parse_commands( int argc, char **argv )
                     if (is_digits(sarg)) {
                         m_PlayerExpires = atoi(sarg);
                         if (m_PlayerExpires <= 0) {
-                            SPRTF("ERROR: TTL value must be greater than ZERO! Not [%s]\n",sarg);
+                            fprintf(stderr,"ERROR: TTL value must be greater than ZERO! Not [%s]\n",sarg);
                             goto Bad_ARG;
                         }
                     } else {
-                        SPRTF("ERROR: TTL value must be digits only! Not [%s]\n",sarg);
+                        fprintf(stderr,"ERROR: TTL value must be digits only! Not [%s]\n",sarg);
                         goto Bad_ARG;
                     }
                     i++;
                 } else {
-                    SPRTF("ERROR: TTL time in integer seconds must follow!\n");
+                    fprintf(stderr,"ERROR: TTL time in integer seconds must follow!\n");
                     goto Bad_ARG;
                 }
-                if (VERB1) SPRTF("%s: Set TTL time out to [%d] secs\n", mod_name, (int)m_PlayerExpires);
+                if (VERB1) printf("%s: Set TTL time out to [%d] secs\n", mod_name, (int)m_PlayerExpires);
                 break;
             // SPRTF(" --raw file     (-r) = Set the packet output file. (def=%s)\n", raw_log );
             case 'r':
@@ -534,14 +545,14 @@ int parse_commands( int argc, char **argv )
                         raw_log_disabled = true;
                     i++;
                 } else {
-                    SPRTF("ERROR: raw log file value must follow!\n");
+                    fprintf(stderr,"ERROR: raw log file value must follow!\n");
                     goto Bad_ARG;
                 }
                 if (VERB1) {
                     if (raw_log_disabled)
-                        SPRTF("%s: raw log file disabled.\n", mod_name);
+                        printf("%s: raw log file disabled.\n", mod_name);
                     else
-                        SPRTF("%s: Set raw log output to [%s]\n", mod_name, raw_log);
+                        printf("%s: Set raw log output to [%s]\n", mod_name, raw_log);
                 }
                 break;
 #ifdef USE_POSTGRESQL_DATABASE
@@ -557,13 +568,13 @@ int parse_commands( int argc, char **argv )
 
                     if (VERB1) {
                         if (Enable_SQL_Tracker)
-                            SPRTF("%s: Set PostgreSQL database to %s.\n", mod_name, get_pg_db_name());
+                            printf("%s: Set PostgreSQL database to %s.\n", mod_name, get_pg_db_name());
                         else
-                            SPRTF("%s: PostgreSQL database DISABLED.\n", mod_name);
+                            printf("%s: PostgreSQL database DISABLED.\n", mod_name);
                     }
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: PostgreSQL database name must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: PostgreSQL database name must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -572,9 +583,9 @@ int parse_commands( int argc, char **argv )
                     sarg = argv[i2];
                     set_pg_db_ip(sarg);
                     i++;
-                    if (VERB1) SPRTF("%s: Set PostgreSQL address to [%s]\n", mod_name, get_pg_db_ip());
+                    if (VERB1) printf("%s: Set PostgreSQL address to [%s]\n", mod_name, get_pg_db_ip());
                 } else {
-                    SPRTF("%s: ERROR: IP address must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: IP address must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -583,9 +594,9 @@ int parse_commands( int argc, char **argv )
                     sarg = argv[i2];
                     set_pg_db_port(sarg);
                     i++;
-                    if (VERB1) SPRTF("%s: Set PostgreSQL port to [%s]\n", mod_name, get_pg_db_port());
+                    if (VERB1) printf("%s: Set PostgreSQL port to [%s]\n", mod_name, get_pg_db_port());
                 } else {
-                    SPRTF("%s: ERROR: port value must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: port value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -595,10 +606,10 @@ int parse_commands( int argc, char **argv )
                     i++;
                     if (strcmp(sarg,get_pg_db_user())) {
                         set_pg_db_user(sarg);
-                        if (VERB1) SPRTF("%s: Set PostgreSQL to new user.\n", mod_name);
+                        if (VERB1) printf("%s: Set PostgreSQL to new user.\n", mod_name);
                     }
                 } else {
-                    SPRTF("%s: ERROR: user name must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: user name must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -607,11 +618,11 @@ int parse_commands( int argc, char **argv )
                     sarg = argv[i2];
                     if (strcmp(sarg,get_pg_db_user())) {
                         set_pg_db_pwd(sarg);
-                        if (VERB1) SPRTF("%s: Set PostgreSQL to new password.\n", mod_name);
+                        if (VERB1) printf("%s: Set PostgreSQL to new password.\n", mod_name);
                     }
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: password must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: password must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 break;
@@ -628,14 +639,14 @@ int parse_commands( int argc, char **argv )
                         Enable_SQL_Tracker = false;
                     i++;
                 } else {
-                    SPRTF("ERROR: sql file value must follow!\n");
+                    fprintf(stderr,"ERROR: sql file value must follow!\n");
                     goto Bad_ARG;
                 }
                 if (VERB1) {
                     if (Enable_SQL_Tracker)
-                        SPRTF("%s: Set tracker sql file to [%s]\n", mod_name, get_sqlite3_db_name());
+                        printf("%s: Set tracker sql file to [%s]\n", mod_name, get_sqlite3_db_name());
                     else
-                        SPRTF("%s: Tracker SQL is disabled.\n", mod_name);
+                        printf("%s: Tracker SQL is disabled.\n", mod_name);
                 }
                 break;
 #endif // #ifdef USE_SQLITE3_DATABASE // ie !#ifdef USE_POSTGRESQL_DATABASE
@@ -651,14 +662,14 @@ int parse_commands( int argc, char **argv )
                         tracker_log_disabled = true;
                     i++;
                 } else {
-                    SPRTF("%s: ERROR: tracker log file value must follow!\n", mod_name);
+                    fprintf(stderr,"%s: ERROR: tracker log file value must follow!\n", mod_name);
                     goto Bad_ARG;
                 }
                 if (VERB1) {
                     if (tracker_log_disabled)
-                        SPRTF("%s: tracker log file disabled.\n", mod_name);
+                        printf("%s: tracker log file disabled.\n", mod_name);
                     else
-                        SPRTF("%s: Set tracker log output to [%s]\n", mod_name, tracker_log);
+                        printf("%s: Set tracker log output to [%s]\n", mod_name, tracker_log);
                 }
                 break;
             case 'v':
@@ -694,7 +705,7 @@ int parse_commands( int argc, char **argv )
             }
         } else {
 Bad_ARG:
-            SPRTF("%s: ERROR: Unknown argument [%s]! Try -? Aborting...\n", mod_name, arg);
+            fprintf(stderr,"%s: ERROR: Unknown argument [%s]! Try -? Aborting...\n", mod_name, arg);
             exit(1);
         }
     }
@@ -789,11 +800,13 @@ void simple_stat()
         if (i < pkt_First)
             Bad_Packets += pps[i].count;
     }
-
-    SPRTF("%s: Had %d revc, %d bytes, %d failed P=%d %d/%d/%d TN=%d HTTP=%d\n", mod_name, iRecvCnt, iByteCnt, iFailedCnt,
+    char *tb = GetNxtBuf();
+    sprintf(tb,"%s: Had %d revc, ", mod_name, iRecvCnt);
+    sprintf(EndBuf(tb),"%" PFX64, ui64ByteCnt);
+    sprintf(EndBuf(tb)," bytes, %d failed P=%d %d/%d/%d TN=%d HTTP=%d/%d/%d", iFailedCnt,
                 get_pilot_count(), PacketCount, Bad_Packets, DiscardCount, 
-                m_TelnetReceived, m_HTTPReceived );
-
+                m_TelnetReceived, m_HTTPReceived, m_JReceived, m_XReceived );
+    SPRTF("%s\n",tb);
 #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
     thread_stats();
 #endif // #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
@@ -1043,6 +1056,9 @@ const char *tn_ok = "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/plain\r\n"
     "\r\n";
 const char *tn_nf = "HTTP/1.0 404 Not Found\r\n\r\n";
+const char *tn_na = "HTTP/1.0 405 Method Not Allowed\r\n"
+    "Allow : GET\r\n"
+    "\r\n";
 
 const char *tn_ok1 = "HTTP/1.1 200 OK\r\n"
     "Date: %s GMT\r\n"
@@ -1051,6 +1067,17 @@ const char *tn_ok1 = "HTTP/1.1 200 OK\r\n"
     "Cache-Control: no-cache\r\n"
     "Connection: close\r\n"
     "\r\n";
+
+const char *xml_ok1 = "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/xml\r\n"
+    "Content-Length: %d\r\n"
+    "Cache-Control: no-cache\r\n"
+    "Access-Control-Allow-Origin: *\r\n"
+    "\r\n";
+const char *xml_ok = "HTTP/1.0 200 OK\r\n"
+    "Content-Type: text/xml\r\n"
+    "\r\n";
+
 
 static cf_String out_buf;
 
@@ -1126,8 +1153,10 @@ BrType Get_Browser_Type(char *prot)
     return bt;
 }
 
-// Try as Pete suggested
-// That is ONLY send 'OK' + {json} if it is a 'GET ' + '/data '
+// FIX20130404 - Add XML feed
+// xml  - URL /flights.xml
+// json - URL /flights.json
+// retained: send 'OK' + {json} if it is a 'GET ' + '/data '
 void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     char *buffer, int length, PIPCNT pip )
 {
@@ -1138,6 +1167,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     bool send_json = false;
     bool send_info = false;
     bool send_ok = false;
+    bool send_xml = false;
     int c;
     char *prot;
     BrType bt = bt_unknown;
@@ -1166,7 +1196,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     if ((c = InStr(cp,(char *)"User-Agent:")) != 0) {
         // found User Agent - note assumes PLUS a space
         prot = (cp + c + 11);
-        cp =prot;   // from here to end of this line
+        cp = prot;   // from here to end of this line
         while ((c = *cp) != 0) {
             if (( c == '\r' ) || ( c == '\n' )) {
                 *cp = 0;
@@ -1206,7 +1236,14 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
                 *prot = 0;
             }
         }
-        if (no_uri || ((strncmp(cp,"/",1) == 0) && (cp[1] <= ' '))) {
+        // parse URI
+        if ((strncmp(cp,"/flights.json",13) == 0) && (cp[13] <= ' ')) {
+            send_json = true;
+            if (VERB5) SPRTF("[v5] HTTP GET /flights.json\n",res);
+        } else if ((strncmp(cp,"/flights.xml",12) == 0) && (cp[12] <= ' ')) {
+            send_xml = true;
+            if (VERB5) SPRTF("[v5] HTTP GET /flights.xml\n",res);
+        } else if (no_uri || ((strncmp(cp,"/",1) == 0) && (cp[1] <= ' '))) {
             send_info = true;
             if (VERB5) SPRTF("[v5] HTTP GET %s\n",(no_uri ? "<NoURI>" : "/"));
         } else if ((strncmp(cp,"/data",5) == 0) && (cp[5] <= ' ')) {
@@ -1228,6 +1265,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     char *pbuf = 0;
     int len = 0;
     if (send_json) {
+        m_JReceived++;
         len = Get_JSON( &pbuf );
         if (len && pbuf) {
             if (is_one) {
@@ -1271,6 +1309,52 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
             }
             if (VERB9) SPRTF("[v9] No JSON to send. Sent 404 %d\n");
         }
+    } else if (send_xml) {
+        m_XReceived++;
+        len = Get_XML( &pbuf );
+        if (len && pbuf) {
+            if (is_one) {
+                out_buf.Printf(xml_ok1,len);
+                out_buf.Strcat(pbuf);
+                len = (int)out_buf.Strlen();
+                res = NewHTTP.send ( out_buf.Str(), len, MSG_NOSIGNAL );
+                if (res < 0) {
+                    pip->i_http_senderrs++;
+                } else {
+                    pip->i_http_sentbytes += res;
+                }
+            } else {
+                out_buf.Printf(xml_ok);
+                out_buf.Strcat(pbuf);
+                res = NewHTTP.send ( out_buf.Str(), (int)out_buf.Strlen(), MSG_NOSIGNAL );
+                if (res < 0) {
+                    pip->i_http_senderrs++;
+                } else {
+                    pip->i_http_sentbytes += res;
+                }
+            }
+            if (res < 0) {
+                PERROR("HTTP send failed!");
+            } else {
+                if (VERB9) {
+                    if (( out_buf.Strlen() + 40 ) > M_MAX_SPRTF) {
+                        SPRTF("[v9] Sent %d bytes [", out_buf.Strlen() );
+                        direct_out_it( (char *)out_buf.Str() );
+                        SPRTF("]%d\n",res);
+                    } else 
+                        SPRTF("[v9] Sent %d bytes [%s]%d\n", (int)out_buf.Strlen(), out_buf.Str(), res );
+                }
+            }
+        } else {
+            res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL ); //FILE NOT FOUND
+            if (res < 0) {
+                pip->i_http_senderrs++;
+            } else {
+                pip->i_http_sentbytes += res;
+            }
+            if (VERB9) SPRTF("[v9] No JSON to send. Sent 404 %d\n");
+        }
+
     } else if (send_info) {
         std::string s = get_info_json();
         len = (int)s.size();
@@ -1284,16 +1368,16 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
         }
         if (VERB9) SPRTF("[v9] send info [%s] res = %d\n", out_buf.Str(),res);
     } else if (send_ok) {
-        res = NewHTTP.send ( tn_ok, (int)strlen(tn_ok), MSG_NOSIGNAL );
-        if (VERB9) SPRTF("[v9] HTTP sent 200 OK msg... (%d)\n", res);
+        res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL );
+        if (VERB9) SPRTF("[v9] HTTP sent 404 Not Found.(%d)\n", res);
         if (res < 0) {
             pip->i_http_senderrs++;
         } else {
             pip->i_http_sentbytes += res;
         }
     } else {
-        res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL ); //FILE NOT FOUND
-        if (VERB9) SPRTF("[v9] HTTP sent 404 NOT FOUND msg... %d\n", res);
+        res = NewHTTP.send ( tn_na, (int)strlen(tn_na), MSG_NOSIGNAL ); //FILE NOT FOUND
+        if (VERB9) SPRTF("[v9] HTTP sent 405 Method Not Allowed %d\n", res);
         if (res < 0) {
             pip->i_http_senderrs++;
         } else {
@@ -1463,7 +1547,7 @@ int Do_RecvFrom()
     last_select = last_keyboard = last_json = last_stat = last_expire = 0;
     iRecvCnt = 0;
     iFailedCnt = 0;
-    iByteCnt = 0;
+    ui64ByteCnt = 0;
 
     if (VERB1) SPRTF("%s: Enter FOREVER loop...\n", mod_name);
     show_key_help();
@@ -1514,7 +1598,7 @@ int Do_RecvFrom()
                         pt = Deal_With_Packet( packet, res );
                         if (pt < pkt_Max) sPktStr[pt].count++;  // set the packet stats
                         iRecvCnt++;
-                        iByteCnt += res;
+                        ui64ByteCnt += res;
                         last_select = 0; // make LAST != any current to IMMEDIATELY do another select
                         had_recv = true;
                     }
@@ -1562,6 +1646,7 @@ int Do_RecvFrom()
 
         if (last_json != curr) {
             Write_JSON();
+            Write_XML(); // FIX20130404 - Add XML feed
             last_json = curr;
         }
 
@@ -1755,10 +1840,15 @@ void set_init_json()
 int cf_client_main(int argc, char **argv)
 {
     int iret = 0;
-
+    // all output to printf or fprintf(stderr,...)
     parse_commands(argc,argv);  // will NOT return if ERROR
 
-    if (VERB1) SPRTF("Running %s, version %s\n", argv[0], VERSION);
+    // Establish LOG file
+    add_std_out(1);     // send to stdout
+    add_sys_date(1);    // Add date/time
+    add_append_log(1);  // append to log
+    set_log_file( (char *)get_cf_log_file() ); // set and OPEN LOG file
+    SPRTF("Running %s, version %s\n", argv[0], VERSION);
 
     if ( netInit() ) {
         return 1; // HUH! Windows load ws2_32.lib failed!!
@@ -1834,10 +1924,11 @@ int cf_client_main(int argc, char **argv)
 #ifndef _MSC_VER
 	if (RunAsDaemon)
 	{
-		SG_LOG2 (SG_SYSTEMS, SG_ALERT, "# crossfeed client starting as daemon!");
+		SPRTF("%s: crossfeed client starting as daemon!\n", mod_name);
+        add_std_out(0);
+		add_screen_out(0); // remove stdout output from logging
         Myself = new cDaemon;
 		Myself->Daemonize ();
-		add_screen_out(0); // remove stdout output from logging
 	}
 #endif
 
@@ -1854,6 +1945,7 @@ int cf_client_main(int argc, char **argv)
         thread_stop(false);
 #endif // #if (defined(USE_POSTGRESQL_DATABASE) || defined(USE_SQLITE3_DATABASE))
 
+    close_log_file(); // close the LOG file
     return iret; // return to OS
 }
 
@@ -2168,7 +2260,7 @@ int load_test_file()
                 pt = Deal_With_Packet( pbgn, cnt );
                 if (pt < pkt_Max) sPktStr[pt].count++;  // set the packet stats
                 iRecvCnt++;
-                iByteCnt += cnt;
+                ui64ByteCnt += cnt;
                 packets++;
                 if ((packets % 10000) == 0) {
                     tm.stamp();
@@ -2197,6 +2289,7 @@ int load_test_file()
                     } while (id == get_epoch_usecs());
                 } else {
                     Write_JSON();
+                    Write_XML(); // FIX20130404 - Add XML feed
                 }
                 //tm.stamp();
                 //d2 = tm.toNSecs();
@@ -2208,6 +2301,7 @@ int load_test_file()
         cnt++;
         if (last_json != curr) {
             Write_JSON();
+            Write_XML(); // FIX20130404 - Add XML feed
             last_json = curr;
         }
 
@@ -2231,6 +2325,7 @@ int load_test_file()
     }   // for len of buffer
     Get_JSON_Expired(&pbuf);
     Write_JSON();
+    Write_XML(); //FIX20130404 - Add XML feed
     show_stats();
     fclose(fp);
     free(tb);
@@ -2253,4 +2348,4 @@ int main(int argc, char **argv)
 }
 
 
-// eof - cf_server.cxx
+// eof - cf_client.cxx

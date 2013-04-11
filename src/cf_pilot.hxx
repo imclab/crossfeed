@@ -34,6 +34,11 @@ extern int Write_JSON();
 extern int Get_JSON( char **pbuf );
 extern int Get_JSON_Expired( char **pbuf );
 
+// FIX20130404 - Add XML feed
+extern int Write_XML(); // FIX20130404 - Add XML feed
+extern int Get_XML( char **pbuf );
+
+
 extern time_t m_PlayerExpires;
 extern double m_MinDistance_m;
 extern int m_MinSpdChange_kt;

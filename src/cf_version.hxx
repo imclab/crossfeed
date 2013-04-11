@@ -31,7 +31,7 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #endif
-#pragma warning ( disable : 4996 )  // disbale this SILLY warning
+#pragma warning ( disable : 4996 )  // disable this SILLY warning
 // Including SDKDDKVer.h defines the highest available Windows platform.
 // If you wish to build your application for a previous Windows platform, include WinSDKVer.h and
 // set the _WIN32_WINNT macro to the platform you wish to support before including SDKDDKVer.h.
@@ -39,7 +39,7 @@
 #endif // _MSC_VER
 
 #ifndef VERSION
-#define VERSION "0.9.9"
+#define VERSION "1.0.99"
 #endif
 
 #endif // #ifndef _CF_VERSION_HXX_

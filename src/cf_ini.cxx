@@ -166,8 +166,8 @@ int readINI( char *file )
     // # File Outputs:
     if (ini.Select("outputs")) {
         // # --log file     (-l) = Set the log output file. (def=tempcft.txt)
-        s = ini.Get<std::string,std::string>("log_file",get_log_file());
-        set_log_file((char *)s.c_str(),false); // if 'none' will disable log // log_file=tempcft.txt or cf_client.log
+        s = ini.Get<std::string,std::string>("log_file",get_cf_log_file());
+        set_cf_log_file((char *)s.c_str()); // if 'none' will disable log // log_file=tempcft.txt or cf_client.log
 
         // # --json file    (-j) = Set the output file for JSON. (def=none)
         s = ini.Get<std::string,std::string>("json_file",(json_file ? json_file : "none"));

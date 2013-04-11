@@ -67,9 +67,9 @@ char *GetNxtBuf()
 
 #define  MXIO     512
 #ifdef _MSC_VER // use local log
-static char def_log[] = "tempcft.txt";
+static const char *def_log = "cf_client.txt";
 #else
-static char def_log[] = "cf_tracker.log";
+static const char *def_log = "/var/log/crossfeed/cf_client.log";
 #endif
 char logfile[256] = "\0";
 FILE * outfile = NULL;
@@ -79,6 +79,7 @@ static int addflush = 1;
 static int add2screen = 0;
 static int add2listview = 0;
 static int append_to_log = 0;
+static int addsysdate = 0;
 
 #ifndef VFP
 #define VFP(a) ( a && ( a != (FILE *)-1 ) )
@@ -112,6 +113,14 @@ int   add_sys_time( int val )
    addsystime = val;
    return i;
 }
+
+int   add_sys_date( int val )
+{
+   int   i = addsysdate;
+   addsysdate = val;
+   return i;
+}
+
 
 int   add_append_log( int val )
 {
@@ -265,7 +274,11 @@ static void oi( char * ps )
          open_log_file();
       }
       if( VFP(outfile) ) {
-          if( addsystime ) {
+          if ( addsysdate ) {
+              char *tb = GetNxtBuf();
+              len = sprintf( tb, "%s - %s", get_date_time_stg(), ps );
+              ps = tb;
+          } else if( addsystime ) {
               char *tb = GetNxtBuf();
               len = sprintf( tb, "%s - %s", get_time_stg(), ps );
               ps = tb;

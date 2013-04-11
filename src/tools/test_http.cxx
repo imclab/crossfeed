@@ -17,7 +17,7 @@
 #include "test_data.hxx"
 #include "test_http.hxx"
 
-const char *mod_name = "test_http.cxx";
+const char *mod_name = "test_http";
 
 // http://localhost:3335/data to fetch data...
 
@@ -52,6 +52,8 @@ typedef int SOCKET;
 std::string get_info_json();
 void set_init_json();
 void Add_IP_Counts( std::string &s );
+int Get_XML( char **pbuf );
+void write_recv_log( char *packet, int len );
 
 
 #ifndef MX_PACKET_SIZE
@@ -436,6 +438,8 @@ static netSocket *m_HTTPSocket = 0;
 static int m_HTTPPort = HTTP_PORT;
 static string m_HTTPAddress = SERVER_ADDRESS;
 static int m_HTTPReceived = 0;
+static int m_JReceived = 0;
+static int m_XReceived = 0;
 
 /* ------------------------------------------------
     NOTES:
@@ -546,6 +550,9 @@ const char *tn_ok = "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/plain\r\n"
     "\r\n";
 const char *tn_nf = "HTTP/1.0 404 Not Found\r\n\r\n";
+const char *tn_na = "HTTP/1.0 405 Method Not Allowed\r\n"
+    "Allow : GET\r\n"
+    "\r\n";
 
 const char *tn_ok1 = "HTTP/1.1 200 OK\r\n"
     "Date: %s GMT\r\n"
@@ -554,6 +561,17 @@ const char *tn_ok1 = "HTTP/1.1 200 OK\r\n"
     "Cache-Control: no-cache\r\n"
     "Connection: close\r\n"
     "\r\n";
+
+const char *xml_ok1 = "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/xml\r\n"
+    "Content-Length: %d\r\n"
+    "Cache-Control: no-cache\r\n"
+    "Access-Control-Allow-Origin: *\r\n"
+    "\r\n";
+const char *xml_ok = "HTTP/1.0 200 OK\r\n"
+    "Content-Type: text/xml\r\n"
+    "\r\n";
+
 
 static cf_String out_buf;
 
@@ -634,8 +652,10 @@ BrType Get_Browser_Type(char *prot)
     return bt;
 }
 
-// Try as Pete suggested
-// That is ONLY send 'OK' + {json} if it is a 'GET ' + '/data '
+// FIX20130404 - Add XML feed
+// xml  - URL /flights.xml
+// json - URL /flights.json
+// retained: send 'OK' + {json} if it is a 'GET ' + '/data '
 void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     char *buffer, int length, PIPCNT pip )
 {
@@ -646,6 +666,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     bool send_json = false;
     bool send_info = false;
     bool send_ok = false;
+    bool send_xml = false;
     int c;
     char *prot;
     BrType bt = bt_unknown;
@@ -714,7 +735,14 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
                 *prot = 0;
             }
         }
-        if (no_uri || ((strncmp(cp,"/",1) == 0) && (cp[1] <= ' '))) {
+        // parse URI
+        if ((strncmp(cp,"/flights.json",13) == 0) && (cp[13] <= ' ')) {
+            send_json = true;
+            if (VERB5) SPRTF("[v5] HTTP GET /flights.json\n",res);
+        } else if ((strncmp(cp,"/flights.xml",12) == 0) && (cp[12] <= ' ')) {
+            send_xml = true;
+            if (VERB5) SPRTF("[v5] HTTP GET /flights.xml\n",res);
+        } else if (no_uri || ((strncmp(cp,"/",1) == 0) && (cp[1] <= ' '))) {
             send_info = true;
             if (VERB5) SPRTF("[v5] HTTP GET %s\n",(no_uri ? "<NoURI>" : "/"));
         } else if ((strncmp(cp,"/data",5) == 0) && (cp[5] <= ' ')) {
@@ -736,6 +764,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
     char *pbuf = 0;
     int len = 0;
     if (send_json) {
+        m_JReceived++;
         len = Get_JSON( &pbuf );
         if (len && pbuf) {
             if (is_one) {
@@ -779,6 +808,52 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
             }
             if (VERB9) SPRTF("[v9] No JSON to send. Sent 404 %d\n");
         }
+    } else if (send_xml) {
+        m_XReceived++;
+        len = Get_XML( &pbuf );
+        if (len && pbuf) {
+            if (is_one) {
+                out_buf.Printf(xml_ok1,len);
+                out_buf.Strcat(pbuf);
+                len = (int)out_buf.Strlen();
+                res = NewHTTP.send ( out_buf.Str(), len, MSG_NOSIGNAL );
+                if (res < 0) {
+                    pip->i_http_senderrs++;
+                } else {
+                    pip->i_http_sentbytes += res;
+                }
+            } else {
+                out_buf.Printf(xml_ok);
+                out_buf.Strcat(pbuf);
+                res = NewHTTP.send ( out_buf.Str(), (int)out_buf.Strlen(), MSG_NOSIGNAL );
+                if (res < 0) {
+                    pip->i_http_senderrs++;
+                } else {
+                    pip->i_http_sentbytes += res;
+                }
+            }
+            if (res < 0) {
+                PERROR("HTTP send failed!");
+            } else {
+                if (VERB9) {
+                    if (( out_buf.Strlen() + 40 ) > M_MAX_SPRTF) {
+                        SPRTF("[v9] Sent %d bytes [", out_buf.Strlen() );
+                        direct_out_it( (char *)out_buf.Str() );
+                        SPRTF("]%d\n",res);
+                    } else 
+                        SPRTF("[v9] Sent %d bytes [%s]%d\n", (int)out_buf.Strlen(), out_buf.Str(), res );
+                }
+            }
+        } else {
+            res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL ); //FILE NOT FOUND
+            if (res < 0) {
+                pip->i_http_senderrs++;
+            } else {
+                pip->i_http_sentbytes += res;
+            }
+            if (VERB9) SPRTF("[v9] No JSON to send. Sent 404 %d\n");
+        }
+
     } else if (send_info) {
         std::string s = get_info_json();
         len = (int)s.size();
@@ -792,16 +867,16 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
         }
         if (VERB9) SPRTF("[v9] send info [%s] res = %d\n", out_buf.Str(),res);
     } else if (send_ok) {
-        res = NewHTTP.send ( tn_ok, (int)strlen(tn_ok), MSG_NOSIGNAL );
-        if (VERB9) SPRTF("[v9] HTTP sent 200 OK msg... (%d)\n", res);
+        res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL );
+        if (VERB9) SPRTF("[v9] HTTP sent 404 Not Found.(%d)\n", res);
         if (res < 0) {
             pip->i_http_senderrs++;
         } else {
             pip->i_http_sentbytes += res;
         }
     } else {
-        res = NewHTTP.send ( tn_nf, (int)strlen(tn_nf), MSG_NOSIGNAL ); //FILE NOT FOUND
-        if (VERB9) SPRTF("[v9] HTTP sent 404 NOT FOUND msg... %d\n", res);
+        res = NewHTTP.send ( tn_na, (int)strlen(tn_na), MSG_NOSIGNAL ); //FILE NOT FOUND
+        if (VERB9) SPRTF("[v9] HTTP sent 405 Method Not Allowed %d\n", res);
         if (res < 0) {
             pip->i_http_senderrs++;
         } else {
@@ -897,6 +972,7 @@ void Deal_With_HTTP( SOCKET fd, netAddress &HTTPAddress )
     res = NewHTTP.recv( packet, MX_PACKET_SIZE, 0 ); // get request
     if (res > 0) {
         packet[res] = 0; // ensure ZERO termination
+        write_recv_log( packet, res );
         pip->i_http_receives++;
         Handle_HTTP_Receive( NewHTTP, HTTPAddress, packet, res, pip );
     } else if (NewHTTP.isNonBlockingError() ) {
@@ -915,6 +991,7 @@ void Deal_With_HTTP( SOCKET fd, netAddress &HTTPAddress )
     pip->total += diff;
 }
 
+////////////////////////////////////////////////////////////////////////
 int Create_HTTP_Port()
 {
     m_HTTPSocket = new netSocket;
@@ -1158,7 +1235,8 @@ int main(int argc, char **argv)
     if ( Create_HTTP_Port() )
         return 1;
 
-    if (VERB1) SPRTF("%s: Established HTTP on [%s], on port %d\n", mod_name, 
+    //if (VERB1)
+        SPRTF("%s: Established HTTP on [%s], on port %d\n", mod_name, 
             (m_HTTPAddress.size() ? m_HTTPAddress.c_str() : "IPADDR_ANY"), 
                 m_HTTPPort );
 
@@ -1301,5 +1379,82 @@ void set_init_json()
     SPRTF(get_info_json().c_str());
 }
 //////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////
+// just some test data
+char test_xml[] =
+"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+"<fg_server pilot_cnt=\"51\">\n"
+"<marker callsign=\"BRT0010\" server_ip=\"217.78.131.44\" model=\"CH47\" lat=\"46.150001\" lng=\"9.721475\" alt=\"2002\" heading=\"270\" spd_kt=\"2\"/>\n"
+"<marker callsign=\"K_LOU\" server_ip=\"217.78.131.44\" model=\"777-300ER\" lat=\"40.468859\" lng=\"0.609131\" alt=\"38884\" heading=\"231\" spd_kt=\"468\"/>\n"
+"<marker callsign=\"AVA0419\" server_ip=\"217.78.131.44\" model=\"747-8i\" lat=\"49.881906\" lng=\"6.404948\" alt=\"25273\" heading=\"267\" spd_kt=\"433\"/>\n"
+"<marker callsign=\"D-AHGM\" server_ip=\"217.78.131.44\" model=\"DO-J-II-r\" lat=\"-5.455874\" lng=\"-34.813835\" alt=\"200\" heading=\"60\" spd_kt=\"103\"/>\n"
+"<marker callsign=\"HTFC\" server_ip=\"217.78.131.44\" model=\"777-200\" lat=\"52.861970\" lng=\"-0.439007\" alt=\"16874\" heading=\"313\" spd_kt=\"369\"/>\n"
+"<marker callsign=\"Canseco\" server_ip=\"217.78.131.44\" model=\"m2000-5\" lat=\"41.303328\" lng=\"1.268287\" alt=\"3316\" heading=\"65\" spd_kt=\"492\"/>\n"
+"<marker callsign=\"MCA0340\" server_ip=\"217.78.131.44\" model=\"757-200PF\" lat=\"8.108645\" lng=\"90.564546\" alt=\"38161\" heading=\"117\" spd_kt=\"533\"/>\n"
+"<marker callsign=\"Budgie\" server_ip=\"217.78.131.44\" model=\"fokker100\" lat=\"37.515161\" lng=\"-122.503276\" alt=\"47\" heading=\"138\" spd_kt=\"103\"/>\n"
+"<marker callsign=\"TICO\" server_ip=\"217.78.131.44\" model=\"A330-223\" lat=\"5.406599\" lng=\"-74.915577\" alt=\"20492\" heading=\"187\" spd_kt=\"404\"/>\n"
+"<marker callsign=\"mateus\" server_ip=\"217.78.131.44\" model=\"737-300\" lat=\"-23.619982\" lng=\"-46.661343\" alt=\"2591\" heading=\"147\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"OK-JVK\" server_ip=\"217.78.131.44\" model=\"777-200\" lat=\"48.000418\" lng=\"12.652122\" alt=\"19231\" heading=\"66\" spd_kt=\"428\"/>\n"
+"<marker callsign=\"Rayonix\" server_ip=\"217.78.131.44\" model=\"FFR-41-Mave\" lat=\"31.962241\" lng=\"133.544567\" alt=\"37020\" heading=\"56\" spd_kt=\"539\"/>\n"
+"<marker callsign=\"MTHEUS\" server_ip=\"217.78.131.44\" model=\"A380-House\" lat=\"-23.105851\" lng=\"-46.972417\" alt=\"17506\" heading=\"331\" spd_kt=\"521\"/>\n"
+"<marker callsign=\"Nabbit\" server_ip=\"217.78.131.44\" model=\"777-300\" lat=\"53.293241\" lng=\"7.017913\" alt=\"6593\" heading=\"64\" spd_kt=\"274\"/>\n"
+"<marker callsign=\"F-BLCK\" server_ip=\"217.78.131.44\" model=\"m2000-5\" lat=\"12.665360\" lng=\"-31.075469\" alt=\"16001\" heading=\"252\" spd_kt=\"571\"/>\n"
+"<marker callsign=\"LEOYO\" server_ip=\"217.78.131.44\" model=\"777-200LR\" lat=\"43.328941\" lng=\"-69.201296\" alt=\"34568\" heading=\"232\" spd_kt=\"513\"/>\n"
+"<marker callsign=\"RA85565\" server_ip=\"217.78.131.44\" model=\"tu154b-model\" lat=\"78.126878\" lng=\"15.313179\" alt=\"7486\" heading=\"70\" spd_kt=\"272\"/>\n"
+"<marker callsign=\"Victor\" server_ip=\"217.78.131.44\" model=\"777-200ER\" lat=\"37.476463\" lng=\"-122.086019\" alt=\"2009\" heading=\"320\" spd_kt=\"197\"/>\n"
+"<marker callsign=\"thuko48\" server_ip=\"217.78.131.44\" model=\"A330-200\" lat=\"41.729868\" lng=\"-71.433949\" alt=\"24485\" heading=\"221\" spd_kt=\"375\"/>\n"
+"<marker callsign=\"D-FA03\" server_ip=\"217.78.131.44\" model=\"777-300ER\" lat=\"48.188379\" lng=\"12.174397\" alt=\"6818\" heading=\"71\" spd_kt=\"262\"/>\n"
+"<marker callsign=\"N-TSKT\" server_ip=\"217.78.131.44\" model=\"A380\" lat=\"32.535307\" lng=\"-77.958152\" alt=\"4676\" heading=\"227\" spd_kt=\"313\"/>\n"
+"<marker callsign=\"KOUBI\" server_ip=\"217.78.131.44\" model=\"Concorde_ba\" lat=\"52.168512\" lng=\"20.964927\" alt=\"347\" heading=\"334\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"CrshLdr\" server_ip=\"217.78.131.44\" model=\"A380\" lat=\"35.155601\" lng=\"-119.981712\" alt=\"19976\" heading=\"152\" spd_kt=\"527\"/>\n"
+"<marker callsign=\"JFC\" server_ip=\"217.78.131.44\" model=\"777-200ER\" lat=\"-6.346298\" lng=\"-35.487358\" alt=\"8919\" heading=\"216\" spd_kt=\"375\"/>\n"
+"<marker callsign=\"AVA0462\" server_ip=\"217.78.131.44\" model=\"CRJ-200\" lat=\"55.712061\" lng=\"-2.533998\" alt=\"16844\" heading=\"144\" spd_kt=\"437\"/>\n"
+"<marker callsign=\"DLH1522\" server_ip=\"217.78.131.44\" model=\"A320neo\" lat=\"51.135906\" lng=\"13.775033\" alt=\"723\" heading=\"220\" spd_kt=\"19\"/>\n"
+"<marker callsign=\"ULMM\" server_ip=\"217.78.131.44\" model=\"787-8\" lat=\"63.738689\" lng=\"54.757003\" alt=\"31806\" heading=\"68\" spd_kt=\"405\"/>\n"
+"<marker callsign=\"EVIL-TW\" server_ip=\"217.78.131.44\" model=\"b247\" lat=\"52.322293\" lng=\"4.282044\" alt=\"2887\" heading=\"280\" spd_kt=\"151\"/>\n"
+"<marker callsign=\"Magpie\" server_ip=\"217.78.131.44\" model=\"f16\" lat=\"37.619890\" lng=\"-122.500853\" alt=\"10033\" heading=\"212\" spd_kt=\"726\"/>\n"
+"<marker callsign=\"Robertt\" server_ip=\"217.78.131.44\" model=\"777-300ER\" lat=\"31.981690\" lng=\"133.580117\" alt=\"36932\" heading=\"58\" spd_kt=\"497\"/>\n"
+"<marker callsign=\"Dynasty\" server_ip=\"217.78.131.44\" model=\"777-200LR\" lat=\"37.535447\" lng=\"-122.172653\" alt=\"2951\" heading=\"296\" spd_kt=\"178\"/>\n"
+"<marker callsign=\"N407DS\" server_ip=\"217.78.131.44\" model=\"PC-9M\" lat=\"33.634694\" lng=\"-84.447831\" alt=\"1010\" heading=\"90\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"parapal\" server_ip=\"217.78.131.44\" model=\"717-200\" lat=\"37.615657\" lng=\"-122.362191\" alt=\"14\" heading=\"298\" spd_kt=\"97\"/>\n"
+"<marker callsign=\"F-GTUX\" server_ip=\"217.78.131.44\" model=\"tu95\" lat=\"46.944796\" lng=\"61.094648\" alt=\"45095\" heading=\"295\" spd_kt=\"430\"/>\n"
+"<marker callsign=\"F-OJAC\" server_ip=\"217.78.131.44\" model=\"ufo\" lat=\"52.293593\" lng=\"5.304420\" alt=\"1027\" heading=\"207\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"AVA0476\" server_ip=\"217.78.131.44\" model=\"il-96-400\" lat=\"51.421297\" lng=\"-2.874859\" alt=\"23775\" heading=\"133\" spd_kt=\"490\"/>\n"
+"<marker callsign=\"CA0001\" server_ip=\"217.78.131.44\" model=\"A330-243\" lat=\"4.698684\" lng=\"-74.145032\" alt=\"8373\" heading=\"36\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"hk0482x\" server_ip=\"217.78.131.44\" model=\"A330-243\" lat=\"8.607493\" lng=\"-70.227586\" alt=\"36183\" heading=\"50\" spd_kt=\"513\"/>\n"
+"<marker callsign=\"AirChav\" server_ip=\"217.78.131.44\" model=\"CRJ1000\" lat=\"53.195887\" lng=\"-1.929534\" alt=\"9193\" heading=\"114\" spd_kt=\"382\"/>\n"
+"<marker callsign=\"LesBof\" server_ip=\"217.78.131.44\" model=\"SA-315B-Lama\" lat=\"37.509828\" lng=\"-122.495841\" alt=\"32\" heading=\"166\" spd_kt=\"3\"/>\n"
+"<marker callsign=\"dorian\" server_ip=\"217.78.131.44\" model=\"f16\" lat=\"37.633918\" lng=\"-122.358114\" alt=\"2077\" heading=\"359\" spd_kt=\"282\"/>\n"
+"<marker callsign=\"D-MKF1\" server_ip=\"217.78.131.44\" model=\"DO-J-II\" lat=\"42.249737\" lng=\"-8.709688\" alt=\"1\" heading=\"4\" spd_kt=\"2\"/>\n"
+"<marker callsign=\"manu\" server_ip=\"217.78.131.44\" model=\"aerostar\" lat=\"32.935191\" lng=\"-13.540788\" alt=\"7662\" heading=\"217\" spd_kt=\"299\"/>\n"
+"<marker callsign=\"D-Quix0\" server_ip=\"217.78.131.44\" model=\"A340-600-Models\" lat=\"49.617884\" lng=\"6.188058\" alt=\"1163\" heading=\"60\" spd_kt=\"4\"/>\n"
+"<marker callsign=\"F-CFYB\" server_ip=\"217.78.131.44\" model=\"Mirage_F1-model\" lat=\"37.625264\" lng=\"-122.390657\" alt=\"7\" heading=\"118\" spd_kt=\"5\"/>\n"
+"<marker callsign=\"callsig\" server_ip=\"217.78.131.44\" model=\"777-300ER\" lat=\"37.484544\" lng=\"-122.076448\" alt=\"1167\" heading=\"352\" spd_kt=\"288\"/>\n"
+"<marker callsign=\"V--tor\" server_ip=\"217.78.131.44\" model=\"ufo\" lat=\"38.056082\" lng=\"-122.864997\" alt=\"75000\" heading=\"318\" spd_kt=\"0\"/>\n"
+"<marker callsign=\"clyse\" server_ip=\"217.78.131.44\" model=\"Citation-II\" lat=\"37.628646\" lng=\"-122.393191\" alt=\"5\" heading=\"118\" spd_kt=\"3\"/>\n"
+"<marker callsign=\"OK-563\" server_ip=\"217.78.131.44\" model=\"mi24\" lat=\"37.518414\" lng=\"-122.507009\" alt=\"69\" heading=\"132\" spd_kt=\"3\"/>\n"
+"<marker callsign=\"Neilson\" server_ip=\"217.78.131.44\" model=\"dhc2\" lat=\"-16.243001\" lng=\"-68.749687\" alt=\"12521\" heading=\"249\" spd_kt=\"5\"/>\n"
+"<marker callsign=\"DON-SR\" server_ip=\"217.78.131.44\" model=\"SA-315B-Lama\" lat=\"37.613553\" lng=\"-122.357191\" alt=\"3\" heading=\"297\" spd_kt=\"0\"/>\n"
+"</fg_server>\n";
+
+int Get_XML( char **pbuf )
+{
+    *pbuf = &test_xml[0];
+    return (int)strlen(test_xml);
+}
+
+///////////////////////////////////////////////////////
+// just for interest keep a copy of each http request
+const char *http_log = "temphttp.log";
+void write_recv_log( char *packet, int len )
+{
+    if (len <= 0) return;
+    FILE *fp = fopen(http_log,"a");
+    if (!fp) return;
+    int wtn = fwrite(packet,1,len,fp);
+    fclose(fp);
+}
+
 
 // eof - test_http.cxx

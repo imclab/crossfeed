@@ -5,7 +5,7 @@
 #include "sprtf.hxx"
 #include "cf_misc.hxx"
 
-static const char *mod_name = "cf_postgres.cxx";
+static const char *mod_name = "cf_postgres";
 
 cf_postgres::cf_postgres()
 {

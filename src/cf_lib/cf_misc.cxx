@@ -51,7 +51,7 @@
 #include "cf_misc.hxx"
 #include "typcnvt.hxx"
 
-static const char *mod_name = "cf_misc.cxx";
+static const char *mod_name = "cf_misc";
 
 #ifdef _MSC_VER
 

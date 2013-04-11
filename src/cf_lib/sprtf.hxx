@@ -37,10 +37,11 @@ extern "C" {
 #endif
 
 extern int add_std_out( int val );
-extern int add_sys_time( int val );
+extern int add_sys_time( int val ); // add time string
 extern int add_screen_out( int val );
 extern int add_list_out( int val );
 extern int add_append_log( int val );
+extern int add_sys_date( int val ); // add date/time string
 
 extern int open_log_file( void );
 extern void close_log_file( void );

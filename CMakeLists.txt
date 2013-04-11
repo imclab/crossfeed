@@ -28,19 +28,13 @@ set (SERV_EXE cf_server)
 
 ##################################################
 #####  The version of the program
-#####  Increment AGE if source code
-#####  has changed at ALL (e.g. bugfix)
-#####  If fgms has new features but is still
-#####  protocol compatible increment MINOR
-#####  and set AGE to 0
-#####  If fgms gets incompatible with older
-#####  version increment MAJOR and set MINOR
-#####  and AGE to 0
 ##################################################
-# The version number.
-set (cf_MAJOR 1)
-set (cf_MINOR 0)
-set (cf_AGE   27)
+# read 'version' file into a variable (stripping any newlines or spaces)
+file(READ version versionFile)
+if (NOT versionFile)
+    message(FATAL_ERROR "Unable to determine CROSSFEED version. 'version' file is missing.")
+endif()
+string(STRIP ${versionFile} CF_VERSION)
 
 if (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
     message(FATAL_ERROR "*** ERROR: Only ONE of USE_POSTGRESQL_DATABASE or USE_SQLITE3_DATABASE can be enabled, NOT BOTH!")
@@ -86,9 +80,22 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${MSVC_LD_FLAGS}")
 include_directories ("${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/src/cf_lib" "${PROJECT_SOURCE_DIR}/src/tools")
 
 # add a VERSION define
-add_definitions( -DVERSION="${cf_MAJOR}.${cf_MINOR}.${cf_AGE}" )
+add_definitions( -DVERSION="${CF_VERSION}" )
 
 if (WIN32)
+    # TODO - this should be 'guessed', not HARD CODED
+    # see ConfigureMsvc3rdParty.cmake for one way to do this, like
+    if (MSVC)
+        get_filename_component(PARENT_DIR ${PROJECT_SOURCE_DIR} PATH)
+        set(TEST_3RDPARTY_DIR "${PARENT_DIR}/3rdparty")
+        if (EXISTS ${TEST_3RDPARTY_DIR})
+            #set(MSVC_3RDPARTY_ROOT ${PARENT_DIR} CACHE PATH "Location where the third-party dependencies are extracted")
+            message(STATUS "*** FOUND TEST_3RDPARTY_DIR=${TEST_3RDPARTY_DIR}")
+        else (EXISTS ${TEST_3RDPARTY_DIR})
+            #set(MSVC_3RDPARTY_ROOT NOT_FOUND CACHE PATH "Location where the third-party dependencies are extracted")
+            message(STATUS "*** NOT FOUND TEST_3RDPARTY_DIR=${TEST_3RDPARTY_DIR}")
+        endif (EXISTS ${TEST_3RDPARTY_DIR})
+    endif ()
     include_directories ( C:/FG/17/3rdParty/include )
     link_directories( C:/FG/17/3rdParty/lib )
 endif (WIN32)
@@ -363,7 +370,7 @@ else (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
 message(STATUS "*** BOTH DATABASES NOT ON = No build of transfer app sqlLi2Pg")
 endif (USE_POSTGRESQL_DATABASE AND USE_SQLITE3_DATABASE)
 
-# CROSSFEED FEEDER APP, for testing
+# CROSSFEED FEEDER APP, for testing - need a raw packet log
 set(cff_SRCS src/tools/cf_feed.cxx)
 add_executable(test_feed ${cff_SRCS})
 target_link_libraries(test_feed ${EXTRA_LIBS} )

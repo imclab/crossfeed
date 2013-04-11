@@ -78,7 +78,7 @@ void win_wsa_perror( char *msg )
 }
 #endif // _MSC_VER
 
-static const char *mod_name = "cf_feed.cxx";
+static const char *mod_name = "cf_feed";
 
 // some OPTIONS
 #ifndef SERVER_ADDRESS
@@ -89,10 +89,15 @@ static const char *mod_name = "cf_feed.cxx";
 #define SERVER_PORT		3333
 #endif
 
-static 	netSocket *m_DataSocket;
+#ifndef MAX_PACKET_SIZE
+#define MAX_PACKET_SIZE 1200
+#endif
+
+static 	netSocket *m_DataSocket = 0;
 static std::string m_BindAddress = SERVER_ADDRESS;
 static int m_ListenPort = SERVER_PORT;
 static int m_verbosity = 0;
+static bool use_big_load = false;   // set to TRUE to perload WHOLE file into buffer
 
 #define M_VERB1 (m_verbosity >= 1)
 #define M_VERB2 (m_verbosity >= 2)
@@ -124,9 +129,10 @@ int AddCrossfeed( const std::string &Server, int Port )
     IP = NewRelay.Address.getIP();
     if ( IP != INADDR_ANY && IP != INADDR_NONE ) {
         m_CrossfeedList.push_back(NewRelay);
+        SPRTF("%s: Established UDP %s on %d\n", mod_name, s.c_str(), Port);
     } else {
         SPRTF("%s: ERROR: AddCrossfeed: FAILED on [%s], port %d\n", mod_name,
-            Server.c_str(), Port);
+            s.c_str(), Port);
         return 1;
     }
     return 0;
@@ -165,11 +171,11 @@ static int init_data_socket()
 
 static int m_CrossFeedFailed = 0;
 static int m_CrossFeedSent = 0;
-static double d1, d2, secs, d3;
+static double begin_secs, d2, secs, d3;
 void show_stats()
 {
     d2 = get_seconds();
-    secs = d2 - d1;
+    secs = d2 - begin_secs;
     if (secs > 0.0) {
         d3 = (double)m_CrossFeedSent / secs;
         SPRTF("%s: Sent %d packets, (f=%d) in %s, at %.2f pkts/sec\n", mod_name, m_CrossFeedSent, m_CrossFeedFailed,
@@ -226,7 +232,7 @@ static vPKTS vPackets;
 //static int packet_min = 40000;
 //static int packet_max = 40000 + 40000;
 static int packet_min = 0;
-static int packet_max = 40000;
+static int packet_max = 0; // 40000;
 //static int do_sleep_10 = 1;
 static int ms_sleep = 10;  // 10-100;
 static time_t stat_delay = 30;
@@ -238,6 +244,163 @@ const char *raw_log = (char *)"C:\\Users\\user\\Downloads\\logs\\fgx-cf\\cf_raw.
 const char *raw_log = (char *)"/home/geoff/downloads/cf_raw.log";
 #endif
 
+void Send_Packet( PKTS &pkt )
+{
+    mT_RelayListIt CurrentCrossfeed = m_CrossfeedList.begin();
+    while (CurrentCrossfeed != m_CrossfeedList.end()) {
+        int sent = m_DataSocket->sendto(pkt.bgn, pkt.cnt, 0, &CurrentCrossfeed->Address);
+        if (SERROR(sent)) {
+            PERROR("sendto crossfeed failed!");
+            m_CrossFeedFailed++;
+        } else {
+            m_CrossFeedSent++;
+        }
+        CurrentCrossfeed++;
+    }
+}
+
+
+// stream read the raw log file
+int load_cf_log()
+{
+    struct stat buf;
+    const char *tf = raw_log;
+    int file_size, file_read, len;
+    if (stat(tf,&buf)) {
+        SPRTF("stat of %s file failed!\n",tf);
+        return 1;
+    }
+    file_size = (int)buf.st_size;
+	SPRTF("%s: Creating %d byte buffer...\n", mod_name, MAX_PACKET_SIZE+2 );
+    char *tb = (char *)malloc( MAX_PACKET_SIZE+2 );
+    if (!tb) {
+        SPRTF("malloc(%d) file failed!\n",(int) MAX_PACKET_SIZE+2);
+        return 2;
+    }
+    FILE *fp = fopen(tf,"rb");
+    if (!fp) {
+        SPRTF("open of %s file failed!\n",tf);
+        free(tb);
+        return 3;
+    }
+
+	SPRTF("%s: Processing file %d bytes, buffer by buffer...\n", mod_name, file_size );
+    file_read = 0;
+    int i, c;
+    char *pbgn = 0;
+    int packets = 0;
+    int cnt = 0;
+    int off = 0;
+    time_t curr, last_json, last_stat;
+    bool exit_key = false;
+    //PKT pkt;
+    //Packet_Type pt;
+    struct timespec req;
+    PKTS pkt;
+    //PPKTSTR ppt = Get_Pkt_Str();
+    //clear_prop_stats();
+    //clear_upd_type_stats();
+    curr = last_json = last_stat = 0;
+    packets = 0;
+    while ( file_read < file_size ) {
+        curr = time(0);
+        len = fread(tb+off,1,MAX_PACKET_SIZE-off,fp);
+        if (len <= 0)
+            break;
+        file_read += len;
+        len += off; // add remainder from last read
+        for (i = 0; i < len; i++) {
+            c = tb[i];
+            // 53 46 47 46 00 01 00 01 00 00 00 07
+            //if ((c == 'S') && (tb[i+1] == 'F') && (tb[i+2] == 'G') && (tb[i+3] == 'F')) 
+            if ((tb[i+0] == 0x53)&&(tb[i+1] == 0x46)&&(tb[i+2] == 0x47)&&(tb[i+3] == 0x46)&&
+                (tb[i+4] == 0x00)&&(tb[i+5] == 0x01)&&(tb[i+6] == 0x00)&&(tb[i+7] == 0x01)&&
+                (tb[i+8] == 0x00)&&(tb[i+9] == 0x00)&&(tb[i+10]== 0x00)&&(tb[i+11]== 0x07)) {
+                if (pbgn && cnt) {
+                    if (packets == 0) begin_secs = get_seconds();
+                    packets++;
+                    if (M_VERB9) SPRTF("Deal with packet len %d\n", cnt);
+                    pkt.bgn = pbgn;
+                    pkt.cnt = cnt;
+                    if (packets >= packet_min)
+                        Send_Packet( pkt );
+                    //pt = Deal_With_Packet( pbgn, cnt );
+                    //ppt[pt].count++;
+                    off = len - cnt;
+                    break;
+                }
+                pbgn = &tb[i];
+                cnt = 0;
+            }
+            cnt++;
+        }
+        c = 0;
+        for ( ; i < len; i++) {
+            tb[c++] = tb[i];    // move remaining data to head of buffer
+        }
+        pbgn = 0;
+        cnt = 0;
+        if (packets > packet_min) {
+            if (ms_sleep > 0) {
+                int ms = ms_sleep;
+                // throttle send rate - give receiver a chance
+                req.tv_sec = ms / 1000;     // get WHOLE seconds, if any
+                ms -= (int)(req.tv_sec * 1000);    // get remaining ms
+                req.tv_nsec = ms * 1000000; // set nano-seconds 
+                nanosleep( &req, 0 ); // give over the CPU for default 10 ms
+                // this gives a rate of about 60 pkts/s...
+            }
+            if (curr >= last_stat) {
+                last_stat = curr + stat_delay;
+                show_stats();
+            }
+        }
+        if (curr != last_json) {
+            // Write_JSON();
+             if (Poll_Keyboard()) {
+                 exit_key = true;
+                break;
+             }
+            last_json = curr;
+        }
+        if (packet_max && (packets >= packet_max)) {
+            SPRTF("%s: Reached maximum packets to send... aborting...\n");
+            break;
+        }
+
+    }
+    fclose(fp);
+    // ==========================================================================
+    // send LAST packet
+    if (!exit_key && pbgn && cnt && 
+        ((packet_max == 0)||(packets < packet_max)) && 
+        (packets >= packet_min)) {
+        packets++;
+        if (M_VERB9) SPRTF("Deal with packet len %d\n", cnt);
+        pkt.bgn = pbgn;
+        pkt.cnt = cnt;
+        if (packets >= packet_min)
+            Send_Packet( pkt );
+        //pt = Deal_With_Packet( pbgn, cnt );
+        //ppt[pt].count++;
+        off = len - cnt;
+    }
+    // ==========================================================================
+	SPRTF("%s: Processed the raw buffer... sent %d packets.\n", mod_name, packets );
+
+    //show_prop_stats();
+    //show_chat_stats();
+    //show_packet_stats();
+    //show_upd_type_stats();
+    //out_flight_json();
+    //vPackets.clear();
+    show_stats();
+    free(tb);
+    return 0;
+}
+
+
+// whole load into a single buffer
 int load_packet_log()
 {
     int xit = 0;
@@ -325,26 +488,18 @@ int load_packet_log()
     }
     SPRTF("%s: Got %d packets to send...!\n", mod_name, (int)max );
     size_t ii;
-    d1 = get_seconds();
+    begin_secs = get_seconds();
     for (ii = 0; ii < max; ii++) {
         curr = time(0);
         pkt = vPackets[ii];
-        mT_RelayListIt CurrentCrossfeed = m_CrossfeedList.begin();
-        while (CurrentCrossfeed != m_CrossfeedList.end()) {
-            int sent = m_DataSocket->sendto(pkt.bgn, pkt.cnt, 0, &CurrentCrossfeed->Address);
-            if (SERROR(sent)) {
-                PERROR("sendto crossfeed failed!");
-                m_CrossFeedFailed++;
-            } else {
-                m_CrossFeedSent++;
-            }
-            CurrentCrossfeed++;
-        }
+        Send_Packet(pkt);
         if (ms_sleep > 0) {
+            int ms = ms_sleep;
             // throttle send rate - give receiver a chance
-            req.tv_sec = 0;
-            req.tv_nsec = ms_sleep * 1000000;
-            nanosleep( &req, 0 ); // give over the CPU for 10 ms
+            req.tv_sec = ms / 1000;     // get WHOLE seconds, if any
+            ms -= (int)(req.tv_sec * 1000);    // get remaining ms
+            req.tv_nsec = ms * 1000000; // set nano-seconds 
+            nanosleep( &req, 0 ); // give over the CPU for default 10 ms
             // this gives a rate of about 60 pkts/s...
         }
         if (curr >= last_stat) {
@@ -359,13 +514,10 @@ int load_packet_log()
         }
     }
     free(tb);
-    d2 = get_seconds();
-    secs = d2 - d1;
-    d3 = (double)m_CrossFeedSent / secs;
-    SPRTF("%s: Sent %d packets, (f=%d) in %s, at %.2f pkts/sec\n", mod_name, m_CrossFeedSent, m_CrossFeedFailed,
-        get_seconds_stg(secs), d3);
+    show_stats();
     return xit;
 }
+
 
 #ifndef ISNUM
 #define ISNUM(a) ((a >= '0')&&(a <= '9'))
@@ -387,7 +539,8 @@ static int is_digits(char * arg)
 
 static void give_help()
 {
-    printf("\nfgms connection:\n");
+    printf("\ntest_feed: version %s, compiled %s, at %s\n", VERSION, __DATE__, __TIME__);
+    printf("\ncrossfeed connection: (to cf_client)\n");
     if (m_BindAddress.size()) 
         printf(" --IP addr      (-I) = Set IP address to send to crossfeed. (def=%s)\n", m_BindAddress.c_str());
     else
@@ -395,7 +548,13 @@ static void give_help()
     printf(" --PORT val     (-P) = Set PORT address to send to crossfeed. (dep=%d)\n", m_ListenPort);
     printf(" --THROT ms     (-T) = Throttle UDP send per integer millisecond sleeps. 0 for none (def=%d)\n", ms_sleep);
     printf(" --FILE name    (-F) = Set input raw file log. (def=%s)\n", raw_log );
-
+    printf(" --help, -h, -?      = This help and exit(0).\n");
+    printf(" --whole        (-w) = Use whole file read into allocated buffer.\n");
+    printf("\n");
+    printf("Purpose: Read in a raw crossfeed packet log, and send the packets out via UDP,\n");
+    printf("at a 'throttled' rate, sleeping in between.\n");
+    printf("When running monitors the keyboard after each sleep for the following keys - ");
+    show_key_help();
 }
 
 int parse_args(int argc, char **argv)
@@ -424,7 +583,7 @@ int parse_args(int argc, char **argv)
                     i++;
                     if (M_VERB1) SPRTF("%s: Raw log to %s\n", mod_name, raw_log);
                 } else {
-                    printf("ERROR: FILE name must follow\n");
+                    printf("ERROR: FILE name must follow!\n");
                     goto Bad_Arg;
                 }
                 break;
@@ -439,7 +598,7 @@ int parse_args(int argc, char **argv)
                     if (M_VERB1) SPRTF("%s: Bind address to %s\n", mod_name,
                         (m_BindAddress.size() ? m_BindAddress.c_str() : "INADDR_ANY"));
                 } else {
-                    printf("ERROR: IP address must follow\n");
+                    printf("ERROR: IP address must follow!\n");
                     goto Bad_Arg;
                 }
                 break;
@@ -450,7 +609,7 @@ int parse_args(int argc, char **argv)
                     if (M_VERB1) SPRTF("%s: Bind port to %s\n", mod_name, m_ListenPort);
                     i++;
                 } else {
-                    printf("ERROR: PORT value must follow\n");
+                    printf("ERROR: PORT value must follow!\n");
                     goto Bad_Arg;
                 }
                 break;
@@ -483,6 +642,10 @@ int parse_args(int argc, char **argv)
                     m_verbosity++;
                 if (M_VERB1) printf("%s: Set m_verbosity to %d\n", mod_name, m_verbosity);
                 break;
+            case 'w':
+                use_big_load = true;
+                if (M_VERB1) printf("%s: Set to use whole files read in buffer.\n", mod_name);
+                break;
             default:
                 goto Bad_Arg;
             }
@@ -496,10 +659,14 @@ Bad_Arg:
     return 0;
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
+// main() - Entry from OS
+////////////////////////////////////////////////////////////////////////////////
 int main( int argc, char **argv )
 {
     int iret = 0;
+
+    // estaablish LOG file
     add_std_out(1);
     add_append_log(1); // this MUST be before name, which open the log
     set_log_file((char *)"tempfeed.txt");
@@ -515,7 +682,12 @@ int main( int argc, char **argv )
         return 1;
     }
 
-    iret = load_packet_log();
+    if (use_big_load)
+        iret = load_packet_log();
+    else
+        iret = load_cf_log();
+
+    if (m_DataSocket) delete m_DataSocket;
 
     return iret;
 }
