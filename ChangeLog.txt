@@ -1,3 +1,9 @@
+2013/04/11 19:16:47 geoff
+
+    * The inevitable minor fixes to compile in Ubuntu
+    * Changed the unix build tools to use a sub-directory build/ which 
+      is included in .gitignore, so git will ignroe all in this folder
+
 2013/04/04 15:00:05 geoff
 
     * Add an XML pilot list feed on URL 'GET /flights.xml HTTP...'. The is 
@@ -9,7 +15,7 @@
       also remains on /data.
     * Methods other than GET are now replied to with 405 Method Not Allowed, adding 
       "Allow : GET\r\n" to the reply if GET other than /flights.json, /flights.xml, /data, /info or /
-    * The MX_PACKET_SIZE set to 1200 (from 1024) to agree with FG multiplayermgr.cxx 
+    * The MAX_PACKET_SIZE set to 1200 (from 1024) to agree with FG multiplayermgr.cxx 
       which has had this value since before Sept 2008, the then CVS source.
     * A version file added containing the version string which is read in by the CMakeLists.txt
       as is now done in SG/FG. CMakeLists.txt will abort if NO version file found.

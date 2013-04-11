@@ -53,7 +53,7 @@ std::string get_info_json();
 void set_init_json();
 void Add_IP_Counts( std::string &s );
 int Get_XML( char **pbuf );
-void write_recv_log( char *packet, int len );
+int write_recv_log( char *packet, int len );
 
 
 #ifndef MX_PACKET_SIZE
@@ -1447,13 +1447,14 @@ int Get_XML( char **pbuf )
 ///////////////////////////////////////////////////////
 // just for interest keep a copy of each http request
 const char *http_log = "temphttp.log";
-void write_recv_log( char *packet, int len )
+int write_recv_log( char *packet, int len )
 {
-    if (len <= 0) return;
+    if (len <= 0) return 0;
     FILE *fp = fopen(http_log,"a");
-    if (!fp) return;
+    if (!fp) return -1;
     int wtn = fwrite(packet,1,len,fp);
     fclose(fp);
+    return wtn;
 }
 
 

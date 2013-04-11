@@ -47,6 +47,8 @@
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h> // for PRIu64
 #endif // !_MSC_VER
 
 #include <simgear/compiler.h>
@@ -59,8 +61,8 @@
 
 #ifdef _MSC_VER
 #define strtoull  atoui64 //_strtoui64
-unsigned __int64 atoui64(const char *szUnsignedInt) {
-   return _strtoui64(szUnsignedInt, NULL, 10);
+unsigned __int64 atoui64(const char *nptr, char **endptr, int base) {
+   return _strtoui64(nptr, endptr, base);
 }
 #endif
 
@@ -993,7 +995,7 @@ int FetchPositionRecs(PGconn *conn, FLT &flt)
     int alt_off = -1;
     int hdg_off = -1;
     unsigned int flag;
-    int flag_all = (f_lat|f_lon|f_spd|f_alt|f_hdg);
+    unsigned int flag_all = (f_lat|f_lon|f_spd|f_alt|f_hdg);
     WPT wpt;
     PGresult *res;
 
@@ -1331,7 +1333,7 @@ int FetchFlightRecs(PGconn *conn)
                  } else if (j == cs_off) {
                      strcpy(flt.callsign,cp);
                  } else if (j == fid_off) {
-                     flt.fid = strtoull(cp);
+                     flt.fid = strtoull(cp,0,10);
                  }
                  if (M_VERB5 || show_fetch_2) SPRTF("%-15s", cp);
              }
@@ -1375,7 +1377,7 @@ int FetchFlightRecs(PGconn *conn)
                      strcpy(flt.callsign,cp);
                      flag |= ff_cs;
                  } else if (j == fid_off) {
-                     flt.fid = strtoull(cp);
+                     flt.fid = strtoull(cp,0,10);
                      flag |= ff_fid;
                  } else
                      continue;

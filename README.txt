@@ -72,9 +72,13 @@ if it exists. In Windows, that will be %USERPROFILE%\.crossfeedrc
 Ouput:
 ------
 
-This JSON output can also be obtained either by enabling a telnet 
-port, and doing a telnet query on that socket, or by doing a 
-http request, like http://192.168.1.21:3334/data
+A list of currently active flights can be obtains by a simple 
+GET request on the HTTP port, like -
+ http://192.168.1.21:3335/flights.json - get the json string
+ http://192.168.1.21:3335/flights.xml  - get the xml string
+
+These strings are only updated each second, so GET requests more 
+frequent than 1 Hz are a waste of resources. 
 
 
 Building From Source:
@@ -86,20 +90,20 @@ The build.zip source file may contain some 'tools' to assist in this,
 but they may need to be adjusted to your particular environment, and 
 paths.
 
-Create a new out-of-source build folder, say build-cf. 
+Create a new out-of-source build folder, say a sub-directory, 'build'
 Change into this folder, and run -
 
 For unix:
 
-1: build-cf $ cmake [Options] /path/to/cf/source
-2: build-cf $ make
-3: build-cf $ [sudo] make install (if desired)
+1: build $ cmake .. [options]
+2: build $ make
+3: build $ [sudo] make install (if desired)
 
 For msvc:
 
 Command Line Building:
 1: Establish the MSVC environment, then
-2: build-cf > cmake [Options, like -G 'generator'] /path/to/cf/source
+2: build-cf > cmake .. [Options, like -G 'generator']
 3: build-cf > cmake --build . --config Release
 
 GUI Building:
@@ -112,6 +116,18 @@ diectory to thie new out-of-source build folder
    and build the project (F7).
 
 This process should create the cf_client binary.
+
+Alternatively, in the 'build' folder, unzip the build.zip
+build $ unzip ../build.zip
+This file contains a number of tools, like build-fgx-cf.sh (and bat)
+so for building it can be used -
+build $ ./build-fgx-cf.sh [options]
+Use -? to list the options this script supports.
+
+And there is a script to clean all built components from this build
+folder
+build $ ./cmake-clean
+
 
 List of CMake options: see CMakeLists.txt
 -----------------------------------------
@@ -141,7 +157,7 @@ LICENCE.txt        - GNU GPL Version 2
 CMakeLists.txt     - CMake 2.6 or later build
 
 build.zip          - Some CMake build and other tools, scripts.
-This should only be unzipped in an out-of-source build folder. Each of 
+This should only be unzipped in an out-of-source build sub-directory. Each of 
 the tools, scripts may need adjust to your particular environment.
 
 src - <DIR> - main application

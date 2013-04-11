@@ -463,7 +463,7 @@ int Write_XML() // FIX20130404 - Add XML feed
     size_t max, ii;
     PCF_Pilot pp;
     char *pb = _s_xbuf;
-    int len, count;
+    int count;
     max = pvlist->size();
     // clear pevious
     pxs->buf[0] = 0;
@@ -495,7 +495,7 @@ int Write_XML() // FIX20130404 - Add XML feed
         // model=\"%s\"
         // server_ip=\"%s\"
         // callsign=\"%s\"/>\n";
-        len = sprintf(pb,x_mark,
+        sprintf(pb,x_mark,
             (int)(pp->speed + 0.5),
             (int)(pp->heading + 0.5),
             (int)(pp->alt + 0.5),
