@@ -1239,7 +1239,7 @@ void Handle_HTTP_Receive( netSocket &NewHTTP, netAddress &HTTPAddress,
             }
         }
         // parse URI
-        if ((strncmp(cp,"/flights.json",13) == 0) && (cp[13] <= ' ')) {
+        if ((strncmp(cp,"/flights.json",13) == 0) && ((cp[13] <= ' ') || (cp[13] == '?')) ) {
             send_json = true;
             if (VERB5) SPRTF("[v5] HTTP GET /flights.json\n",res);
         } else if ((strncmp(cp,"/flights.xml",12) == 0) && (cp[12] <= ' ')) {

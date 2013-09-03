@@ -1,3 +1,8 @@
+2013/09/03 12:13:01 geoff
+
+    * Expand the /flights.json URL to allow parameter following a '?'. These 
+      parameters are entirely ignore. RFC by Pete.
+
 2013/04/11 19:16:47 geoff
 
     * The inevitable minor fixes to compile in Ubuntu
