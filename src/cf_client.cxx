@@ -37,6 +37,7 @@
 #include <sys/stat.h> // unix struct stat
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h> // for PRIu64
+#include <unistd.h> // for getcwd
 #include "daemon.hxx"
 #include "logstream.hxx"
 #define stricmp strcasecmp
