@@ -5,7 +5,6 @@ before_install:
     - sudo apt-get update -qq 
     - sudo apt-get install libgeographiclib-dev
     - sudo apt-get install libsimgear-dev
-    
 script:
     - cmake .
     - make
