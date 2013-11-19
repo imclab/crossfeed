@@ -4,8 +4,7 @@ compiler:
 before_install:
     - sudo apt-get update -qq 
 script:
-    - cd src
-    - cmake
+    - cmake .
     - make
     
 notifications:
