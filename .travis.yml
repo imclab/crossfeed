@@ -1,0 +1,18 @@
+language: c
+compiler:
+  - gcc
+before_install:
+    - sudo apt-get update -qq 
+script:
+    - cd src
+    - cmake
+    - make
+notifications:
+    channels:
+      - "irc.flightgear.org#fgx"
+    template:
+      - "%{repository} (%{commit}) by %{author} : %{message} %{foo} "
+      - "Build details: %{build_url}"
+      - "Latest commit: %{compare_url}"
+    on_success: change
+    on_failure: change 
